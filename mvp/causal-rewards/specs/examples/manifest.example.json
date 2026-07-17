@@ -1,0 +1,122 @@
+{
+  "spec_version": "1.0.0",
+  "manifest_version": "1.0.0",
+  "experiment_id": "env-sensors-pilot-001",
+  "title": "Environmental Sensor Additionality Pilot 001",
+  "description": "Shadow-mode cluster-randomized evaluation of whether including a geo-cohort's sensor data causes a measurable reduction in out-of-sample prediction error (held-out RMSE). The live prediction service is never degraded; a separate evaluation pipeline randomly includes or holds out geographic cohorts across time blocks.",
+  "created_at": "1721000000",
+  "network": {
+    "cluster": "devnet"
+  },
+  "primary_outcome": {
+    "metric_id": "held_out_rmse",
+    "description": "Out-of-sample root-mean-square prediction error of the PM2.5 nowcast on a held-out validation grid, evaluated per cohort per time block.",
+    "unit_of_measure": "rmse_ug_per_m3",
+    "improvement_direction": "decrease"
+  },
+  "estimand": {
+    "unit_type": "geo_cohort_time_block",
+    "cohort_definition": {
+      "scheme": "geohash_prefix",
+      "spatial_resolution": "geohash_len_5",
+      "cohort_count": "250"
+    },
+    "time_block": {
+      "block_seconds": "3600",
+      "block_count": "168"
+    },
+    "effect_definition": "The average change in held-out RMSE for a cohort x time-block caused by including that cohort's signed observations in the training set, relative to the randomized hold-out counterfactual. Estimated at the cohort level only; no individual-device counterfactual is claimed."
+  },
+  "design": {
+    "template": "cluster_randomized",
+    "eligible_for_strong_causal_claim": true,
+    "parameters": {
+      "randomization": "bernoulli_per_cohort_per_block",
+      "balance_check": "standardized_mean_difference_max_100000",
+      "interference_assumption": "partial_interference_within_cohort"
+    }
+  },
+  "treatment": {
+    "description": "A treated cohort x time-block has its observations included in the training set for that block's nowcast; a control unit is held out.",
+    "assignment_method": "bernoulli",
+    "treated_fraction_micro": "500000"
+  },
+  "assignment": {
+    "seed_commitment": {
+      "algo": "sha256",
+      "scheme": "sha256(\"CRP-seed-commit-v1\"||seed_32)",
+      "commitment_hex": "3b1f9a0c7d2e4f6a8b0c1d2e3f405162738495a6b7c8d9e0f1a2b3c4d5e6f708"
+    }
+  },
+  "analysis_plan": {
+    "estimator": "cluster_robust_ols",
+    "standard_error_method": "cluster_robust",
+    "test_sidedness": "one_sided_lower",
+    "confidence_level_micro": "950000",
+    "critical_value_micro": "1645000",
+    "critical_value_reference": "normal_approx",
+    "covariate_adjustment": [
+      "baseline_rmse",
+      "sensor_density",
+      "hour_of_day"
+    ],
+    "minimum_sample": {
+      "min_units_per_cohort": "5",
+      "min_observations_per_cohort": "200",
+      "min_time_blocks": "24",
+      "min_eligible_cohorts": "10"
+    },
+    "sensitivity_analyses": [
+      "leave_one_cohort_out",
+      "placebo_time_shift",
+      "wild_cluster_bootstrap"
+    ],
+    "analysis_container_digest": "sha256:9f2c4a6e8b0d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f01"
+  },
+  "reward_policy": {
+    "budget_base_units": "100000000000",
+    "mint": "So11111111111111111111111111111111111111112",
+    "positive_improvement_transform": {
+      "type": "negate_then_clamp",
+      "effect_scale": "-6"
+    },
+    "reward_curve": {
+      "type": "piecewise_linear_monotonic",
+      "breakpoints": [
+        ["0", "0"],
+        ["100000", "20000000000"],
+        ["500000", "80000000000"],
+        ["1000000", "120000000000"]
+      ]
+    },
+    "reward_curve_hash": "sha256:14b0ec34d3653a5857ceef10b9bdfee264a6865172c2b2cfb1d2405fae856d41",
+    "intra_cohort_split": {
+      "rule": "quality_weighted",
+      "weight_formula": "1*quality_adjusted_observations",
+      "weight_scale": "-6"
+    },
+    "overflow_policy": "proportional_scale_to_budget",
+    "unused_budget_policy": "recoverable"
+  },
+  "windows": {
+    "freeze_by": "1721001000",
+    "active_start": "1721001600",
+    "active_end": "1721606400",
+    "evaluation_deadline": "1721692800",
+    "challenge_window_seconds": "259200",
+    "claim_window_seconds": "2592000"
+  },
+  "authorities": {
+    "coordinator_pubkey": "CoorD1111111111111111111111111111111111111",
+    "evaluator_pubkey": "EvaL111111111111111111111111111111111111111",
+    "authority_multisig": {
+      "threshold": "2",
+      "signers": [
+        "MuLt1S1g1111111111111111111111111111111111",
+        "MuLt1S1g2222222222222222222222222222222222",
+        "MuLt1S1g3333333333333333333333333333333333"
+      ]
+    },
+    "challenge_bond_base_units": "5000000000"
+  }
+}

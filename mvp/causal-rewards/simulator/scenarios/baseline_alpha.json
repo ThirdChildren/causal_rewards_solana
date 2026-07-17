@@ -1,0 +1,19 @@
+{
+  "name": "baseline_alpha",
+  "description": "Small reproducible baseline for the M1 determinism gate. Not target scale.",
+  "seed": "0x00000000000000000000000000000000000000000000000000000000ba5e11a1",
+  "n_cells": 24,
+  "n_time_blocks": 8,
+  "design": "cluster_randomized",
+  "treatment_fraction": 0.5,
+  "guard_band_cells": 0,
+  "carryover_blocks": 0,
+  "minimum_sample": 40,
+  "confidence_level": 0.95,
+  "coverage": {"mean_sensors_per_cell": 8.0, "dispersion": 1.5, "sparse_cell_fraction": 0.25, "sparse_sensors_per_cell": 1.5},
+  "quality": {"alpha": 5.0, "beta": 2.0},
+  "faults": {"base_risk": 0.03, "quality_sensitivity": 1.5},
+  "sybil": {"sensor_fraction": 0.0, "group_size": 3, "replication_factor": 1.0},
+  "demand": {"shift_amplitude": 0.0, "pattern": "ramp"},
+  "effect": {"baseline_rmse": 1.0, "true_effect": 0.12, "effect_heterogeneity": 0.3, "interference": 0.0, "confounding": 0.0, "cluster_noise_sd": 0.08, "obs_noise_sd": 0.04}
+}

@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causal-rewards.dev/specs/manifest.schema.json",
+  "title": "Causal Rewards Protocol — Experiment Manifest",
+  "description": "The experiment manifest IS the pre-analysis plan. Every field is frozen at Frozen and enters the manifest hash. It contains the assignment-seed COMMITMENT, never the seed. Per serialization.md §2, NO JSON number tokens appear in a hashed artifact: every numeric quantity is carried as a canonical integer-scaled decimal STRING (unsigned '^(0|[1-9][0-9]*)$', signed '^(0|-?[1-9][0-9]*)$'), and all object keys are ASCII. Version this schema; changes are versioned migrations, never silent edits.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "spec_version",
+    "manifest_version",
+    "experiment_id",
+    "title",
+    "network",
+    "primary_outcome",
+    "estimand",
+    "design",
+    "treatment",
+    "assignment",
+    "analysis_plan",
+    "reward_policy",
+    "windows",
+    "authorities"
+  ],
+  "properties": {
+    "spec_version": {
+      "description": "Version of the protocol spec this manifest conforms to.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "manifest_version": {
+      "description": "Version of this manifest schema.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "experiment_id": {
+      "description": "Stable unique identifier / slug for the experiment.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "description": { "type": "string", "maxLength": 4000 },
+    "created_at": {
+      "description": "Author-time unix timestamp (seconds), as a canonical unsigned integer string (serialization.md §2). Informational; frozen with the manifest.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "network": {
+      "description": "Target Solana cluster. MVP is devnet-only (Invariant 7); the single allowed value structurally enforces this.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cluster"],
+      "properties": {
+        "cluster": { "const": "devnet" }
+      }
+    },
+    "primary_outcome": {
+      "description": "The single pre-registered primary outcome. Exactly one; secondary outcomes live under analysis_plan.sensitivity_analyses.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "description", "unit_of_measure", "improvement_direction"],
+      "properties": {
+        "metric_id": { "type": "string", "pattern": "^[a-z0-9_]{2,64}$" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "unit_of_measure": {
+          "description": "Human-readable unit label of the raw outcome metric, e.g. 'rmse_ug_per_m3'.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "improvement_direction": {
+          "description": "Which direction of the raw metric is 'better'. Used by reward_policy.positive_improvement_transform to convert the effect into a non-negative improvement metric before applying the conservative bound.",
+          "enum": ["decrease", "increase"]
+        }
+      }
+    },
+    "estimand": {
+      "description": "Defines the causal estimand and the experimental unit. Invariant 4: the unit is ALWAYS a geographic cohort within a time block, never an individual device. unit_type is a const to enforce this structurally.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit_type", "cohort_definition", "time_block", "effect_definition"],
+      "properties": {
+        "unit_type": {
+          "description": "The experimental unit. Single allowed value enforces Invariant 4.",
+          "const": "geo_cohort_time_block"
+        },
+        "cohort_definition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "cohort_count", "spatial_resolution"],
+          "properties": {
+            "scheme": {
+              "description": "How devices are grouped into geographic cohorts. Must be coarse-grained; exact coordinates never appear here or anywhere hashed (Invariant 5).",
+              "enum": ["geohash_prefix", "admin_region", "predefined_cluster_id"]
+            },
+            "spatial_resolution": {
+              "description": "Coarseness of the cohort grouping (e.g. geohash precision length, or admin level). Kept coarse for data minimization.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "cohort_count": {
+              "description": "Number of geographic cohorts (canonical unsigned integer string >= 1; serialization.md §2).",
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        },
+        "time_block": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["block_seconds", "block_count"],
+          "properties": {
+            "block_seconds": {
+              "description": "Length of one time block in seconds (canonical unsigned integer string >= 1; serialization.md §2).",
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "block_count": {
+              "description": "Number of time blocks (canonical unsigned integer string >= 1; serialization.md §2).",
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        },
+        "effect_definition": {
+          "description": "Prose definition of the treatment effect at the cohort x time-block level, e.g. change in held-out RMSE caused by including a cohort's data.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "design": {
+      "description": "Experimental design template. observational_replay is explicitly NOT eligible for the strongest causal claim.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template", "eligible_for_strong_causal_claim", "parameters"],
+      "properties": {
+        "template": {
+          "enum": [
+            "cluster_randomized",
+            "switchback",
+            "matched_cluster",
+            "observational_replay"
+          ]
+        },
+        "eligible_for_strong_causal_claim": {
+          "description": "Whether this design supports the strongest additionality claim. MUST be false when template is observational_replay (enforced by the allOf below).",
+          "type": "boolean"
+        },
+        "parameters": {
+          "description": "Design-specific parameters, frozen with the manifest as part of the pre-analysis plan (Invariant 1). All numeric values are canonical integer strings (serialization.md §2); all keys ASCII. This object MUST NOT contain any simulator ground-truth knob (true_effect, interference magnitude, confounding, Sybil parameters) — those are simulation inputs, never manifest fields (Invariant 5/6). interference_assumption declares the (untestable) no-interference/partial-interference assumption the causal claim rests on. For template=switchback, carryover_blocks and washout_blocks are additionally required (frozen so the discarded-block set is part of the pre-analysis plan, not chosen after seeing outcomes).",
+          "type": "object",
+          "properties": {
+            "interference_assumption": {
+              "description": "The frozen cross-unit interference assumption underpinning the causal estimand. 'no_interference' = SUTVA at the cohort x time-block level. 'partial_interference_within_cohort' = interference is contained within a cohort; distinct cohorts do not interfere (the standard cluster-randomization assumption). 'spatial_bounded' = interference is limited to adjacent cohorts within the stated spatial_resolution; requires a separate spillover analysis.",
+              "enum": ["no_interference", "partial_interference_within_cohort", "spatial_bounded"]
+            },
+            "carryover_blocks": {
+              "description": "Switchback only: number of trailing time blocks over which a treatment switch's effect is assumed to persist (canonical unsigned integer string; serialization.md §2).",
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "washout_blocks": {
+              "description": "Switchback only: number of leading time blocks discarded from analysis after each switch to neutralize carryover. MUST be >= carryover_blocks (enforced by the causal engine). Canonical unsigned integer string; serialization.md §2.",
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "template": { "const": "observational_replay" } }
+          },
+          "then": {
+            "properties": {
+              "eligible_for_strong_causal_claim": { "const": false }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "template": { "const": "switchback" } }
+          },
+          "then": {
+            "properties": {
+              "parameters": {
+                "required": ["carryover_blocks", "washout_blocks", "interference_assumption"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "treatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "assignment_method", "treated_fraction_micro"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "assignment_method": {
+          "enum": [
+            "bernoulli",
+            "complete_randomization",
+            "matched_pair",
+            "switchback_schedule"
+          ]
+        },
+        "treated_fraction_micro": {
+          "description": "Target fraction of units assigned to treatment, micro-scaled at 1e6 as a canonical unsigned integer string ('500000' = 0.5). Semantic range [0, 1000000] enforced by the producer/verifier (serialization.md §2.3).",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        }
+      }
+    },
+    "assignment": {
+      "description": "Carries the assignment-seed COMMITMENT only. The seed is revealed later via reveal_seed AFTER freeze (Invariant 1, freeze-before-reveal). The seed itself MUST NOT appear in the manifest; the schema has no property to hold it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed_commitment"],
+      "properties": {
+        "seed_commitment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algo", "scheme", "commitment_hex"],
+          "properties": {
+            "algo": { "const": "sha256" },
+            "scheme": {
+              "description": "Commitment construction (serialization.md §7.2), matching the verifier reference exactly. commitment = SHA-256(\"CRP-seed-commit-v1\" || seed), where the domain tag is ASCII bytes and seed is the raw 32-byte assignment seed. There is NO salt: a 32-byte high-entropy seed is its own hiding randomness. reveal_seed later supplies the 32-byte seed; the verifier recomputes and compares.",
+              "const": "sha256(\"CRP-seed-commit-v1\"||seed_32)"
+            },
+            "commitment_hex": {
+              "description": "64 lowercase hex chars = SHA-256 commitment to the assignment seed.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "analysis_plan": {
+      "description": "The frozen analysis plan. Pinned estimator, SE method, confidence level and its integer-scaled critical value, minimum-sample rule, and the analysis container digest. Freezing this before reveal is Invariant 1; pinning the container is Invariant 2.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimator",
+        "standard_error_method",
+        "test_sidedness",
+        "confidence_level_micro",
+        "critical_value_micro",
+        "minimum_sample",
+        "analysis_container_digest"
+      ],
+      "properties": {
+        "estimator": {
+          "enum": ["diff_in_means", "cluster_robust_ols", "switchback_hac", "matched_pair_diff"]
+        },
+        "standard_error_method": {
+          "enum": ["cluster_robust", "hac", "matched_pair", "classical"]
+        },
+        "test_sidedness": {
+          "description": "Conservative payouts use a one-sided lower confidence bound on the improvement metric (Invariant 3).",
+          "const": "one_sided_lower"
+        },
+        "confidence_level_micro": {
+          "description": "Confidence level micro-scaled at 1e6 as a canonical unsigned integer string ('950000' = 0.95). Semantic range (0, 1000000) enforced by producer/verifier.",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "critical_value_micro": {
+          "description": "The one-sided critical value used in conservative_effect = max(0, effect - critical_value * SE). Micro-scaled at 1e6 as a canonical unsigned integer string ('1645000' = 1.645). Frozen explicitly for determinism; MUST be consistent with confidence_level_micro, critical_value_reference, and (for student_t) df.",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "critical_value_reference": {
+          "description": "The distribution the critical value is taken from, for auditability. When 'student_t', the df field is REQUIRED so the critical value is reproducible without recomputation (Invariant 2).",
+          "enum": ["normal_approx", "student_t"]
+        },
+        "df": {
+          "description": "Degrees of freedom for the reference distribution, frozen as a canonical unsigned integer string >= 1 (serialization.md §2). REQUIRED iff critical_value_reference = 'student_t' (enforced by the allOf below); MUST NOT be present for 'normal_approx' (a normal reference has no finite df). For cluster-robust inference the conventional choice is df = (number of clusters - 1). Freezing df makes critical_value_micro auditable and reproducible without re-deriving a quantile.",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "covariate_adjustment": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 64 },
+          "maxItems": 64
+        },
+        "minimum_sample": {
+          "description": "Minimum-sample rule (Invariant 3). A cohort failing ANY of these thresholds is ineligible and contributes zero to any payout.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_units_per_cohort", "min_observations_per_cohort", "min_time_blocks", "min_eligible_cohorts"],
+          "properties": {
+            "min_units_per_cohort": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "min_observations_per_cohort": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "min_time_blocks": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "min_eligible_cohorts": { "type": "string", "pattern": "^[1-9][0-9]*$" }
+          }
+        },
+        "sensitivity_analyses": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "maxItems": 64
+        },
+        "analysis_container_digest": {
+          "description": "Digest of the pinned analysis container (OCI image). Reproducibility depends on this being frozen (Invariant 2).",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "critical_value_reference": { "const": "student_t" } },
+            "required": ["critical_value_reference"]
+          },
+          "then": { "required": ["df"] },
+          "else": {
+            "not": { "required": ["df"] }
+          }
+        }
+      ]
+    },
+    "reward_policy": {
+      "description": "Two-stage reward policy (see reward-policy.md). Stage 1: cohort valuation via the conservative effect curve. Stage 2: frozen quality-weighted split WITHIN each cohort. Budget is fixed; total payout can never exceed it (Invariant 3).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "budget_base_units",
+        "mint",
+        "positive_improvement_transform",
+        "reward_curve",
+        "reward_curve_hash",
+        "intra_cohort_split",
+        "overflow_policy",
+        "unused_budget_policy"
+      ],
+      "properties": {
+        "budget_base_units": {
+          "description": "Fixed total budget in the mint's base units, as a canonical unsigned integer string >= 1 (serialization.md §2, base-units class, scale 1). Sum of all payouts MUST be <= this.",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "mint": {
+          "description": "SPL mint (base58 pubkey) on devnet. No mainnet mint permitted (Invariant 7).",
+          "type": "string",
+          "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+        },
+        "positive_improvement_transform": {
+          "description": "Deterministic map from the raw primary-outcome effect to a non-negative 'improvement' metric before applying the conservative bound. 'signed' keeps the sign consistent with improvement_direction; the reward curve then clamps negatives to zero.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "effect_scale"],
+          "properties": {
+            "type": { "enum": ["signed", "negate_then_clamp", "identity_clamp"] },
+            "effect_scale": {
+              "description": "Signed integer scale EXPONENT (serialization.md §2.2 scale-exponent class) for the improvement metric and the reward-curve input axis, as a canonical signed integer string. '-6' means values are expressed at 1e-6 resolution. Semantic range [-12, 0] enforced by producer/verifier.",
+              "type": "string",
+              "pattern": "^(0|-?[1-9][0-9]*)$"
+            }
+          }
+        },
+        "reward_curve": {
+          "description": "Stage-1 conservative effect curve: a monotonic non-decreasing, piecewise-linear map from the cohort conservative improvement (integer-scaled at effect_scale) to an absolute cohort allocation ceiling in base units. Must map input 0 to output 0.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "breakpoints"],
+          "properties": {
+            "type": { "const": "piecewise_linear_monotonic" },
+            "breakpoints": {
+              "description": "Ordered array of [input_scaled_effect, output_base_units] pairs, each element a canonical unsigned integer STRING (serialization.md §2). Strictly increasing in input; non-decreasing in output; first pair MUST be ['0', '0']. Array order is significant and preserved by the serializer. Values below the first / above the last breakpoint are clamped.",
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }
+              }
+            }
+          }
+        },
+        "reward_curve_hash": {
+          "description": "SHA-256 over the canonical bytes of reward_curve (serialization.md). Redundant commitment so the curve cannot be silently altered.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "intra_cohort_split": {
+          "description": "Stage-2 frozen rule for splitting a cohort's allocation among its participants. Quality-weighted; weights derived deterministically from anchored evidence only.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rule", "weight_formula", "weight_scale"],
+          "properties": {
+            "rule": { "const": "quality_weighted" },
+            "weight_formula": {
+              "description": "A frozen weight expression in the CRP-WS1 grammar (reward-policy.md): a normalized weighted SUM over declared non-negative quality attributes, w_i = sum_k coef_k * attr_k(i). Syntax is exactly 'coef*attr' terms joined by ' + ' (single spaces). coef is a canonical unsigned integer string; attr is a snake_case identifier drawn from the closed attribute vocabulary in reward-policy.md. No products of two attributes, no other operators, no free-form expressions. Attributes are non-negative integers derived deterministically from anchored evidence only (no off-manifest inputs).",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^(0|[1-9][0-9]*)\\*[a-z][a-z0-9_]{0,63}( \\+ (0|[1-9][0-9]*)\\*[a-z][a-z0-9_]{0,63})*$"
+            },
+            "weight_scale": {
+              "description": "Signed integer scale EXPONENT (serialization.md §2.2 scale-exponent class) documenting the resolution of the resulting weight, as a canonical signed integer string. Within-cohort normalization (w_i / sum_j w_j) makes the absolute scale immaterial to the split ratio. Semantic range [-12, 0] enforced by producer/verifier.",
+              "type": "string",
+              "pattern": "^(0|-?[1-9][0-9]*)$"
+            }
+          }
+        },
+        "overflow_policy": {
+          "description": "If summed cohort allocations exceed the budget, scale all allocations down by the single factor min(1, budget / sum). Guarantees total <= budget (Invariant 3).",
+          "const": "proportional_scale_to_budget"
+        },
+        "unused_budget_policy": {
+          "description": "Budget not allocated (cohorts with zero conservative value, or headroom under the curve) is recoverable via close_experiment; never redistributed to force payout.",
+          "const": "recoverable"
+        }
+      }
+    },
+    "windows": {
+      "description": "Lifecycle windows as integer unix seconds. Ordering guards are enforced by the state machine and freeze_experiment pre-conditions (state-machine.md).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "freeze_by",
+        "active_start",
+        "active_end",
+        "evaluation_deadline",
+        "challenge_window_seconds",
+        "claim_window_seconds"
+      ],
+      "properties": {
+        "freeze_by": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+        "active_start": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+        "active_end": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+        "evaluation_deadline": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+        "challenge_window_seconds": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "claim_window_seconds": { "type": "string", "pattern": "^[1-9][0-9]*$" }
+      }
+    },
+    "authorities": {
+      "description": "On-chain authorities. State-changing, frozen-record-affecting instructions (freeze, resolve_challenge, finalize) require the multisig. Coordinator and evaluator are constrained single roles.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coordinator_pubkey",
+        "evaluator_pubkey",
+        "authority_multisig",
+        "challenge_bond_base_units"
+      ],
+      "properties": {
+        "coordinator_pubkey": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" },
+        "evaluator_pubkey": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" },
+        "authority_multisig": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["threshold", "signers"],
+          "properties": {
+            "threshold": {
+              "description": "Multisig threshold, canonical unsigned integer string >= 1 (serialization.md §2). Semantic constraint threshold <= len(signers) enforced by producer/verifier.",
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "signers": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" }
+            }
+          }
+        },
+        "challenge_bond_base_units": {
+          "description": "Bond a challenger must post to open_challenge, as a canonical unsigned integer string >= 1 (serialization.md §2, base-units class). Griefing deterrent (threat-model.md).",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        }
+      }
+    }
+  }
+}

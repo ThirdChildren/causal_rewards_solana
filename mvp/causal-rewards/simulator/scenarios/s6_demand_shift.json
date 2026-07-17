@@ -1,0 +1,19 @@
+{
+  "name": "s6_demand_shift",
+  "description": "DEMAND-SHIFT CONFOUNDING via observational replay: inclusion propensity and outcome level both track cohort demand/info-value, so a naive activity/correlational read attributes demand-driven error changes to the cohort. Randomized designs (s1) break this; observational replay does NOT and is discovery-only. Confounding bias is the headline.",
+  "seed": "0x00000000000000000000000000000000000000000000000000000000de3a4d11",
+  "n_cells": 60,
+  "n_time_blocks": 16,
+  "design": "observational_replay",
+  "treatment_fraction": 0.5,
+  "guard_band_cells": 0,
+  "carryover_blocks": 0,
+  "minimum_sample": 40,
+  "confidence_level": 0.95,
+  "coverage": {"mean_sensors_per_cell": 10.0, "dispersion": 1.5, "sparse_cell_fraction": 0.25, "sparse_sensors_per_cell": 2.0},
+  "quality": {"alpha": 5.0, "beta": 2.0},
+  "faults": {"base_risk": 0.03, "quality_sensitivity": 1.5},
+  "sybil": {"sensor_fraction": 0.0, "group_size": 3, "replication_factor": 1.0},
+  "demand": {"shift_amplitude": 0.6, "pattern": "seasonal"},
+  "effect": {"baseline_rmse": 1.0, "true_effect": 0.05, "effect_heterogeneity": 0.3, "interference": 0.0, "confounding": 0.5, "cluster_noise_sd": 0.06, "obs_noise_sd": 0.03}
+}

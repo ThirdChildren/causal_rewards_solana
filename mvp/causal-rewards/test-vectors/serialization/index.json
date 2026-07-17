@@ -1,0 +1,29 @@
+{
+  "vectors": [
+    {
+      "name": "ser-01-key-ordering",
+      "sha256_hex": "0dee9644997cb0f2ab9ecfedb4a89d9591614d76ff89406485caaba5b335c8ab",
+      "exercises": "object key ordering (UTF-16 code-unit) + array element order preserved"
+    },
+    {
+      "name": "ser-02-unicode-nfc",
+      "sha256_hex": "4832d3870bbdb8501b19247c7b513d87619e5e447660e455e6f97ba3671ec489",
+      "exercises": "Unicode NFC normalization of keys and values: DECOMPOSED input (base char + combining mark) must serialize to the PRECOMPOSED form"
+    },
+    {
+      "name": "ser-03-decimal-scaling",
+      "sha256_hex": "575f9916d1ed942f7a63ad7413ab048d2444c84d5fc9cbc3d972c43d89d04be4",
+      "exercises": "all numeric values carried as strings (no JSON number tokens); scaled fixed-point integers and negative/zero cases"
+    },
+    {
+      "name": "ser-04-control-and-escapes",
+      "sha256_hex": "7cae8b1d7380084e50cb132cce496510e522eb3835f61d1c436352c44700a41b",
+      "exercises": "minimal string escaping: quote, backslash, control chars"
+    },
+    {
+      "name": "ser-05-nested-mixed",
+      "sha256_hex": "99f11b7f139f2afee315a5277a280feda55aedad60be2b204700f24154063c55",
+      "exercises": "nested objects/arrays, booleans, null, empty object/array"
+    }
+  ]
+}

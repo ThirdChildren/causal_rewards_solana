@@ -1,0 +1,17 @@
+# Pinned runtime dependencies for the DePIN simulator (M1 alpha).
+# Determinism (CLAUDE.md #2) requires an EXACT environment. These pins are the first step
+# toward the committed container digest that verifier-reproducibility-engineer will produce;
+# the container will additionally pin the interpreter build and BLAS to keep committed numbers
+# byte-stable across machines. Same-seed reproducibility of the CONTENT HASH holds within one
+# pinned environment.
+#
+# NOTE: the artifact content hash is computed over canonical JSON (see canonical.py), which is
+# insensitive to BLAS/parquet nondeterminism. numpy's PCG64 stream is BLAS-independent, so the
+# integer/float draws are stable across BLAS builds; the container pin closes any residual gap.
+numpy==2.1.3
+scipy==1.14.1
+pandas==2.2.3
+pyarrow==18.1.0
+
+# Test-only:
+pytest==8.3.4

@@ -1,0 +1,13 @@
+{
+  "name": "ser-02-unicode-nfc",
+  "spec_section": "canonical-serialization.md",
+  "exercises": "Unicode NFC normalization of keys and values: DECOMPOSED input (base char + combining mark) must serialize to the PRECOMPOSED form",
+  "input": {
+    "café": "resumé",
+    "näme": "straße"
+  },
+  "canonical_bytes_utf8": "{\"café\":\"resumé\",\"näme\":\"straße\"}",
+  "canonical_bytes_hex": "7b22636166c3a9223a22726573756dc3a9222c226ec3a46d65223a2273747261c39f65227d",
+  "canonical_length": "37",
+  "sha256_hex": "4832d3870bbdb8501b19247c7b513d87619e5e447660e455e6f97ba3671ec489"
+}

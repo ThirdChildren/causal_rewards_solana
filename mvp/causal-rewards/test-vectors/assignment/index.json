@@ -1,0 +1,22 @@
+{
+  "vectors": [
+    {
+      "name": "assign-01-bernoulli-p50",
+      "assignment_root_hex": "c229b5ccfdf447900526a45afac31a009c6348685b135edfe2eb6139ef1b914d",
+      "seed_commitment_hex": "f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c",
+      "exercises": "bernoulli design, treat_fraction 0.5, 4 cohorts; commitment(seed) and seed->assignment shown as distinct steps"
+    },
+    {
+      "name": "assign-02-fixed-count-2of5",
+      "assignment_root_hex": "940b42e0edc6f8d74ffb91f8c3b377e43bd9190e6ea8ce2a9fed9a7d816aa603",
+      "seed_commitment_hex": "e2f5ee3ae684b7fef4639a71a9f3318c792a8c2f21b8df349ffcb6d035fb884c",
+      "exercises": "fixed_count design, exactly 2 of 5 cohorts treated (exact balance, prf-ranked, cohort_id tie-break)"
+    },
+    {
+      "name": "assign-03-bernoulli-p25",
+      "assignment_root_hex": "c463b3f14f812250b67cfbf3f1f33a5804434759d89c0d7469234a5c9e3b9f56",
+      "seed_commitment_hex": "59852177fe866b8ae83912b8bcebf804279d51308cadd69275aed091abe2d0b3",
+      "exercises": "bernoulli design, treat_fraction 0.25, 6 cohorts, different seed (control-heavy expected)"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "depin-sim"
+version = "0.1.0a0"
+description = "Configurable, deterministic DePIN environmental-sensor simulator (Causal Rewards Protocol, M1 alpha)"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy==2.1.3",
+    "scipy==1.14.1",
+    "pandas==2.2.3",
+    "pyarrow==18.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.4"]
+
+[project.scripts]
+depin-sim = "depin_sim.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

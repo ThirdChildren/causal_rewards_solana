@@ -1,0 +1,25 @@
+{
+  "name": "ser-05-nested-mixed",
+  "spec_section": "canonical-serialization.md",
+  "exercises": "nested objects/arrays, booleans, null, empty object/array",
+  "input": {
+    "flag_true": true,
+    "flag_false": false,
+    "nothing": null,
+    "empty_obj": {},
+    "empty_arr": [],
+    "nested": [
+      {
+        "b": "2",
+        "a": "1"
+      },
+      {
+        "a": "3"
+      }
+    ]
+  },
+  "canonical_bytes_utf8": "{\"empty_arr\":[],\"empty_obj\":{},\"flag_false\":false,\"flag_true\":true,\"nested\":[{\"a\":\"1\",\"b\":\"2\"},{\"a\":\"3\"}],\"nothing\":null}",
+  "canonical_bytes_hex": "7b22656d7074795f617272223a5b5d2c22656d7074795f6f626a223a7b7d2c22666c61675f66616c7365223a66616c73652c22666c61675f74727565223a747275652c226e6573746564223a5b7b2261223a2231222c2262223a2232227d2c7b2261223a2233227d5d2c226e6f7468696e67223a6e756c6c7d",
+  "canonical_length": "121",
+  "sha256_hex": "99f11b7f139f2afee315a5277a280feda55aedad60be2b204700f24154063c55"
+}

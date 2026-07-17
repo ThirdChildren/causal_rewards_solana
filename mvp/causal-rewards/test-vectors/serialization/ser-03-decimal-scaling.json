@@ -1,0 +1,16 @@
+{
+  "name": "ser-03-decimal-scaling",
+  "spec_section": "canonical-serialization.md",
+  "exercises": "all numeric values carried as strings (no JSON number tokens); scaled fixed-point integers and negative/zero cases",
+  "input": {
+    "effect_ppm": "-125000",
+    "reward_lamports": "1000000000",
+    "std_error_ppm": "0",
+    "leading_zero_ppm": "007",
+    "big_uint": "18446744073709551615"
+  },
+  "canonical_bytes_utf8": "{\"big_uint\":\"18446744073709551615\",\"effect_ppm\":\"-125000\",\"leading_zero_ppm\":\"007\",\"reward_lamports\":\"1000000000\",\"std_error_ppm\":\"0\"}",
+  "canonical_bytes_hex": "7b226269675f75696e74223a223138343436373434303733373039353531363135222c226566666563745f70706d223a222d313235303030222c226c656164696e675f7a65726f5f70706d223a22303037222c227265776172645f6c616d706f727473223a2231303030303030303030222c227374645f6572726f725f70706d223a2230227d",
+  "canonical_length": "134",
+  "sha256_hex": "575f9916d1ed942f7a63ad7413ab048d2444c84d5fc9cbc3d972c43d89d04be4"
+}

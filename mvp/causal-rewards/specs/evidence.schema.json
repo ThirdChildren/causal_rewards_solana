@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://causal-rewards.dev/specs/evidence.schema.json",
+  "title": "Causal Rewards Protocol — Signed Evidence Batch (Epoch)",
+  "description": "A signed evidence batch anchored per epoch via post_evidence_epoch. Data minimization (Invariant 5): this structure carries ONLY commitments, coarse cohort labels, integer-scaled aggregate counts, time ranges, and signatures. Raw telemetry, exact coordinates, timestamps of individual readings, and any personal data are FORBIDDEN and have no property to hold them. The header is what gets hashed on-chain; observation payloads stay off-chain and enter only as Merkle-leaf commitments.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "spec_version",
+    "experiment_id",
+    "epoch_index",
+    "cohort_id",
+    "time_range",
+    "signer_set_commitment",
+    "observations_commitment",
+    "aggregate_summary",
+    "batch_signature"
+  ],
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "experiment_id": {
+      "description": "MUST equal the frozen manifest's experiment_id.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+    },
+    "epoch_index": {
+      "description": "Monotonic epoch counter within the experiment, starting at 0.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "cohort_id": {
+      "description": "Coarse cohort label consistent with manifest.estimand.cohort_definition. Opaque and coarse (e.g. a geohash prefix or predefined cluster id) — never exact coordinates (Invariant 5).",
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{1,64}$"
+    },
+    "time_range": {
+      "description": "Half-open interval [start, end) in integer unix seconds covering the time blocks this batch reports. Coarse block-level range, not per-observation timestamps.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "signer_set_commitment": {
+      "description": "Commitment to the set of participant signing keys that contributed observations in this batch. Merkle root over the sorted set of signer pubkeys; the pubkeys themselves stay off-chain.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algo", "merkle_root_hex", "signer_count", "leaf_scheme"],
+      "properties": {
+        "algo": { "const": "sha256" },
+        "merkle_root_hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "signer_count": { "type": "integer", "minimum": 1 },
+        "leaf_scheme": {
+          "description": "Merkle leaf construction over signer identities.",
+          "const": "sha256(0x00||'signer'||signer_pubkey_be32)"
+        }
+      }
+    },
+    "observations_commitment": {
+      "description": "Commitment to the signed observations in this batch. Merkle root over per-observation content commitments. Each leaf is a commitment to an OFF-CHAIN signed observation (see $defs.observation_leaf) — the observation payload itself is never in this structure.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algo", "merkle_root_hex", "leaf_count", "leaf_scheme"],
+      "properties": {
+        "algo": { "const": "sha256" },
+        "merkle_root_hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "leaf_count": { "type": "integer", "minimum": 1 },
+        "leaf_scheme": {
+          "description": "Merkle leaf construction over observation content commitments (see $defs.observation_leaf).",
+          "const": "sha256(0x00||'obs'||observation_commitment_be32)"
+        }
+      }
+    },
+    "aggregate_summary": {
+      "description": "Minimized, integer-only aggregate summary sufficient for reward weighting and sanity checks. No distributional detail that could re-identify a device or leak location. Fields here feed the frozen intra-cohort quality weight (reward-policy.md stage 2).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted_count", "rejected_count", "distinct_signers"],
+      "properties": {
+        "accepted_count": {
+          "description": "Number of observations accepted after validation. Integer.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejected_count": {
+          "description": "Number rejected by validation. Integer.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "distinct_signers": {
+          "description": "Distinct signing keys represented. Integer. MUST be <= signer_set_commitment.signer_count.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "quality_score_micro_sum": {
+          "description": "Optional integer-scaled sum of per-observation quality scores at 1e-6, used by the frozen weight_formula. Integer-scaled; never a float.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "batch_signature": {
+      "description": "Signature by the batch producer (coordinator or delegated collector) over the canonical bytes of this batch header (all fields except batch_signature). Proves the anchored header is what the producer committed to.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algo", "signer_pubkey", "header_hash_hex", "signature_hex"],
+      "properties": {
+        "algo": { "const": "ed25519" },
+        "signer_pubkey": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" },
+        "header_hash_hex": {
+          "description": "SHA-256 over CJSON of this object with batch_signature removed (serialization.md). The signature is over these 32 bytes.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "signature_hex": { "type": "string", "pattern": "^[0-9a-f]{128}$" }
+      }
+    }
+  },
+  "$defs": {
+    "observation_leaf": {
+      "description": "OFF-CHAIN reference structure for a single signed observation. NOT part of the anchored batch; documented here so leaf commitments are computed identically by all parties. Note it too carries only a payload COMMITMENT, not raw telemetry — data minimization applies even off-chain in the audit bundle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signer_pubkey", "cohort_id", "time_block_index", "payload_commitment_hex", "signature_hex"],
+      "properties": {
+        "signer_pubkey": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" },
+        "cohort_id": { "type": "string", "pattern": "^[a-z0-9_-]{1,64}$" },
+        "time_block_index": {
+          "description": "Index of the time block within the experiment window (integer). Coarse; not a per-reading wall-clock timestamp.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "payload_commitment_hex": {
+          "description": "SHA-256 commitment to the raw signed reading, which is held off-chain by the coordinator/participant. The raw reading is NEVER placed in any protocol artifact.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "signature_hex": { "type": "string", "pattern": "^[0-9a-f]{128}$" }
+      }
+    }
+  }
+}

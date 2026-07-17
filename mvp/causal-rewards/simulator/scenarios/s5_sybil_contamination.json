@@ -1,0 +1,19 @@
+{
+  "name": "s5_sybil_contamination",
+  "description": "SYBIL CONTAMINATION: 35% of sensors are sybils duplicating a group's data (replication x3). Sybils inflate activity/quality counts but add ZERO information value, so their cohorts get no extra RMSE reduction. Activity/quality baselines overpay sybil-heavy cohorts; causal should not. Redundancy-waste metric is the headline.",
+  "seed": "0x0000000000000000000000000000000000000000000000000000000005b11b11",
+  "n_cells": 60,
+  "n_time_blocks": 16,
+  "design": "cluster_randomized",
+  "treatment_fraction": 0.5,
+  "guard_band_cells": 0,
+  "carryover_blocks": 0,
+  "minimum_sample": 40,
+  "confidence_level": 0.95,
+  "coverage": {"mean_sensors_per_cell": 10.0, "dispersion": 1.5, "sparse_cell_fraction": 0.25, "sparse_sensors_per_cell": 2.0},
+  "quality": {"alpha": 5.0, "beta": 2.0},
+  "faults": {"base_risk": 0.03, "quality_sensitivity": 1.5},
+  "sybil": {"sensor_fraction": 0.35, "group_size": 4, "replication_factor": 3.0},
+  "demand": {"shift_amplitude": 0.0, "pattern": "ramp"},
+  "effect": {"baseline_rmse": 1.0, "true_effect": 0.15, "effect_heterogeneity": 0.3, "interference": 0.0, "confounding": 0.0, "cluster_noise_sd": 0.06, "obs_noise_sd": 0.03}
+}

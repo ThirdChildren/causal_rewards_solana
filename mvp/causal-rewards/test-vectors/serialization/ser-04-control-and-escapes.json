@@ -1,0 +1,12 @@
+{
+  "name": "ser-04-control-and-escapes",
+  "spec_section": "canonical-serialization.md",
+  "exercises": "minimal string escaping: quote, backslash, control chars",
+  "input": {
+    "s": "line1\nline2\ttab\"quote\"back\\slash\u0001x"
+  },
+  "canonical_bytes_utf8": "{\"s\":\"line1\\nline2\\ttab\\\"quote\\\"back\\\\slash\\u0001x\"}",
+  "canonical_bytes_hex": "7b2273223a226c696e65315c6e6c696e65325c747461625c2271756f74655c226261636b5c5c736c6173685c753030303178227d",
+  "canonical_length": "52",
+  "sha256_hex": "7cae8b1d7380084e50cb132cce496510e522eb3835f61d1c436352c44700a41b"
+}

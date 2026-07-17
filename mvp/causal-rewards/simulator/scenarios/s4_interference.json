@@ -1,0 +1,19 @@
+{
+  "name": "s4_interference",
+  "description": "INTERFERENCE / SPILLOVER: treating a cohort also lowers neighbor cohorts' error, contaminating controls and biasing the naive effect DOWNWARD. Compare naive cluster-randomized vs the guard-band variant (s4b) that drops contaminated controls. Bias/sensitivity must be surfaced, not hidden.",
+  "seed": "0x000000000000000000000000000000000000000000000000000000001ee4e4ce",
+  "n_cells": 60,
+  "n_time_blocks": 16,
+  "design": "cluster_randomized",
+  "treatment_fraction": 0.5,
+  "guard_band_cells": 0,
+  "carryover_blocks": 0,
+  "minimum_sample": 40,
+  "confidence_level": 0.95,
+  "coverage": {"mean_sensors_per_cell": 10.0, "dispersion": 1.5, "sparse_cell_fraction": 0.25, "sparse_sensors_per_cell": 2.0},
+  "quality": {"alpha": 5.0, "beta": 2.0},
+  "faults": {"base_risk": 0.03, "quality_sensitivity": 1.5},
+  "sybil": {"sensor_fraction": 0.0, "group_size": 3, "replication_factor": 1.0},
+  "demand": {"shift_amplitude": 0.0, "pattern": "ramp"},
+  "effect": {"baseline_rmse": 1.0, "true_effect": 0.15, "effect_heterogeneity": 0.3, "interference": 0.6, "confounding": 0.0, "cluster_noise_sd": 0.06, "obs_noise_sd": 0.03}
+}

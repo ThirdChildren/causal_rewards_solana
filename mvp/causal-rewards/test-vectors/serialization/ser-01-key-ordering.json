@@ -1,0 +1,22 @@
+{
+  "name": "ser-01-key-ordering",
+  "spec_section": "canonical-serialization.md",
+  "exercises": "object key ordering (UTF-16 code-unit) + array element order preserved",
+  "input": {
+    "z": "last",
+    "a": "first",
+    "m": {
+      "beta": "2",
+      "alpha": "1"
+    },
+    "list": [
+      "3",
+      "1",
+      "2"
+    ]
+  },
+  "canonical_bytes_utf8": "{\"a\":\"first\",\"list\":[\"3\",\"1\",\"2\"],\"m\":{\"alpha\":\"1\",\"beta\":\"2\"},\"z\":\"last\"}",
+  "canonical_bytes_hex": "7b2261223a226669727374222c226c697374223a5b2233222c2231222c2232225d2c226d223a7b22616c706861223a2231222c2262657461223a2232227d2c227a223a226c617374227d",
+  "canonical_length": "74",
+  "sha256_hex": "0dee9644997cb0f2ab9ecfedb4a89d9591614d76ff89406485caaba5b335c8ab"
+}

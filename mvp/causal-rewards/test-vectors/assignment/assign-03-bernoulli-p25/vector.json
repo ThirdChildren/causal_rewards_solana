@@ -1,0 +1,143 @@
+{
+  "name": "assign-03-bernoulli-p25",
+  "spec_section": "canonical-serialization.md (Merkle + assignment derivation)",
+  "exercises": "bernoulli design, treat_fraction 0.25, 6 cohorts, different seed (control-heavy expected)",
+  "inputs": {
+    "experiment_id": "exp-2026-switchback-007",
+    "seed_hex": "ffeeddccbbaa99887766554433221100112233445566778899aabbccddeeff00",
+    "cohort_ids": [
+      "geo-11-t0",
+      "geo-11-t1",
+      "geo-22-t0",
+      "geo-22-t1",
+      "geo-33-t0",
+      "geo-33-t1"
+    ],
+    "design": "bernoulli",
+    "params": {
+      "treat_fraction_ppm": "250000"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); this is what the frozen manifest commits to, BEFORE the seed is revealed",
+    "seed_commitment_hex": "59852177fe866b8ae83912b8bcebf804279d51308cadd69275aed091abe2d0b3"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64 = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian)",
+    "values": [
+      {
+        "cohort_id": "geo-11-t0",
+        "prf_u64": "16740700300604496674"
+      },
+      {
+        "cohort_id": "geo-11-t1",
+        "prf_u64": "788768807428570574"
+      },
+      {
+        "cohort_id": "geo-22-t0",
+        "prf_u64": "7561294506650824101"
+      },
+      {
+        "cohort_id": "geo-22-t1",
+        "prf_u64": "12994348220160893319"
+      },
+      {
+        "cohort_id": "geo-33-t0",
+        "prf_u64": "11803653677402753250"
+      },
+      {
+        "cohort_id": "geo-33-t1",
+        "prf_u64": "12633475304578083039"
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "1",
+    "control_count": "5"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "geo-11-t0",
+        "arm": "control",
+        "prf_u64": "16740700300604496674",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "geo-11-t0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"geo-11-t0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2267656f2d31312d7430227d",
+        "leaf_hash_hex": "e0937902500ab09fdcad24b7db7cda3f1fa0ba23caf27a3c45462791203cbf9a"
+      },
+      {
+        "cohort_id": "geo-11-t1",
+        "arm": "control",
+        "prf_u64": "788768807428570574",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "geo-11-t1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"geo-11-t1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2267656f2d31312d7431227d",
+        "leaf_hash_hex": "29373c9439e11208b24d300cec485ba44ff9fcf2c9616db5c23f1a21114646c9"
+      },
+      {
+        "cohort_id": "geo-22-t0",
+        "arm": "control",
+        "prf_u64": "7561294506650824101",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "geo-22-t0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"geo-22-t0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2267656f2d32322d7430227d",
+        "leaf_hash_hex": "b2571dd19a99767e8c243b15b1e2ecb1d3a35673702363e19b36e9ca3e01b45b"
+      },
+      {
+        "cohort_id": "geo-22-t1",
+        "arm": "control",
+        "prf_u64": "12994348220160893319",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "geo-22-t1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"geo-22-t1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2267656f2d32322d7431227d",
+        "leaf_hash_hex": "38dd42accb4e7d14fa1234fe1e6cc750b247c98a06c59db1f98554369401f4c7"
+      },
+      {
+        "cohort_id": "geo-33-t0",
+        "arm": "control",
+        "prf_u64": "11803653677402753250",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "geo-33-t0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"geo-33-t0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2267656f2d33332d7430227d",
+        "leaf_hash_hex": "47964ec08b9807e2befe4251ac51472734b756daaa6f44e8555712e546f6a62e"
+      },
+      {
+        "cohort_id": "geo-33-t1",
+        "arm": "treatment",
+        "prf_u64": "12633475304578083039",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "geo-33-t1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"geo-33-t1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a2267656f2d33332d7431227d",
+        "leaf_hash_hex": "5b87f37ae6944ee6f648f85048eaee860c8ef90a3a2803814f65b89b923fef3b"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "c463b3f14f812250b67cfbf3f1f33a5804434759d89c0d7469234a5c9e3b9f56"
+  }
+}

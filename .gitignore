@@ -1,1 +1,30 @@
 Causal_Rewards_Protocol_MVP_Concept_Note_Final.docx
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Simulator / pipeline generated bundles
+out/
+*.parquet
+
+# Node / TS (SDK, dashboard)
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Rust / Anchor (programs)
+target/
+.anchor/
+test-ledger/
+
+# OS / editor
+.DS_Store
+*.swp

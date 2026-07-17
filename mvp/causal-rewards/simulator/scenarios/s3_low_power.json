@@ -1,0 +1,19 @@
+{
+  "name": "s3_low_power",
+  "description": "LOW STATISTICAL POWER: a small true effect swamped by cohort-level noise and few clusters/blocks. The effect is real but the conservative lower bound is often <= 0, so causal pays little. Reporting mostly-zero/uncertain value is the HONEST result about this network's power.",
+  "seed": "0x00000000000000000000000000000000000000000000000000000000101e0111",
+  "n_cells": 20,
+  "n_time_blocks": 8,
+  "design": "cluster_randomized",
+  "treatment_fraction": 0.5,
+  "guard_band_cells": 0,
+  "carryover_blocks": 0,
+  "minimum_sample": 40,
+  "confidence_level": 0.95,
+  "coverage": {"mean_sensors_per_cell": 6.0, "dispersion": 1.5, "sparse_cell_fraction": 0.3, "sparse_sensors_per_cell": 1.5},
+  "quality": {"alpha": 5.0, "beta": 2.0},
+  "faults": {"base_risk": 0.05, "quality_sensitivity": 1.5},
+  "sybil": {"sensor_fraction": 0.0, "group_size": 3, "replication_factor": 1.0},
+  "demand": {"shift_amplitude": 0.0, "pattern": "ramp"},
+  "effect": {"baseline_rmse": 1.0, "true_effect": 0.03, "effect_heterogeneity": 0.5, "interference": 0.0, "confounding": 0.0, "cluster_noise_sd": 0.15, "obs_noise_sd": 0.08}
+}
