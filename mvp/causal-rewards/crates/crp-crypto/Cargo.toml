@@ -6,7 +6,7 @@ license = "Apache-2.0"
 description = "Shared canonical hashing / Merkle / seed-commitment / assignment derivation for the Causal Rewards Protocol. Byte-for-byte identical to specs/serialization.md and the verifier reference. No second encoder."
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["lib"]
 name = "crp_crypto"
 
 [features]

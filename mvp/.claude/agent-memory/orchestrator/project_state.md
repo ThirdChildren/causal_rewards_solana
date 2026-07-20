@@ -15,7 +15,7 @@ metadata:
 
 **M2 component status:**
 - verifier assignment vectors + adversarial fixtures: DELIVERED 2026-07-20, ACCEPTED. 11 assignment vectors (roots unchanged for 01-03; added boundary p0/p1e6, count 0/n, n=1 base case, UTF-16 lexical trap assign-09, 16-cohort balanced, 7-cohort odd promotion) + 6 adversarial fixtures in test-vectors/adversarial/ (adv-01 invalid-seed-reveal SEED_COMMITMENT_MISMATCH, adv-02 EPOCH_INDEX_NOT_MONOTONIC, adv-03 DUPLICATE_EVIDENCE_LEAF, adv-04 STALE_EVALUATION_STATE_MISMATCH, adv-05 CONTAINER_DIGEST_MISMATCH, adv-06 NULLIFIER_ALREADY_USED). verify_vectors.py exit 0 (orchestrator ran). These define M2 gate: programs must reproduce roots + reject all 6 fixtures.
-- solana-program-engineer: RUNNING (4 programs). Given salt-free construction directly in prompt + serialization.md authority.
+- solana-program-engineer: RUNNING (4 programs). Given salt-free construction directly in prompt + serialization.md authority. NOTE: commit 1268cbc swept in this agent's in-flight WIP (Cargo.toml, crates/crp-crypto/) via git add -A while it was still running — partial, not verified/complete. Do NOT treat crp-crypto as done; run anchor build/test + verify against vectors when the agent reports, then commit final state.
 - sdk-engineer: HELD until IDL published.
 - security-reviewer: on path after program/claim changes.
 

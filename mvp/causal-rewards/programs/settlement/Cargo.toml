@@ -1,0 +1,24 @@
+[package]
+name = "settlement"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Causal Rewards Protocol — settlement (evaluation, finalized reward root, single-use Merkle claims, unused-budget recovery). Fees hard-zero."
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "settlement"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "experiment-registry/idl-build"]
+
+[dependencies]
+anchor-lang = { workspace = true, features = ["init-if-needed"] }
+anchor-spl = { workspace = true }
+experiment-registry = { path = "../experiment-registry", features = ["cpi"] }
+crp-crypto = { workspace = true }

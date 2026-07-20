@@ -1,0 +1,23 @@
+[package]
+name = "experiment-registry"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Causal Rewards Protocol — experiment registry (frozen manifest hash, funding, status, windows, authorities, seed commitment/reveal)."
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "experiment_registry"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+crp-crypto = { workspace = true }

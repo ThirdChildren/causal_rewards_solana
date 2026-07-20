@@ -1,0 +1,22 @@
+{
+  "name": "causal-rewards-programs",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "TypeScript integration tests for the Causal Rewards Protocol on-chain programs.",
+  "scripts": {
+    "lint": "prettier -c 'tests/**/*.ts'"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.9"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^10.0.6",
+    "chai": "^4.3.4",
+    "mocha": "^10.4.0",
+    "ts-mocha": "^10.0.0",
+    "typescript": "^5.4.0"
+  }
+}
