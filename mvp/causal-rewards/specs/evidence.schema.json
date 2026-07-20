@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://causal-rewards.dev/specs/evidence.schema.json",
   "title": "Causal Rewards Protocol — Signed Evidence Batch (Epoch)",
-  "description": "A signed evidence batch anchored per epoch via post_evidence_epoch. Data minimization (Invariant 5): this structure carries ONLY commitments, coarse cohort labels, integer-scaled aggregate counts, time ranges, and signatures. Raw telemetry, exact coordinates, timestamps of individual readings, and any personal data are FORBIDDEN and have no property to hold them. The header is what gets hashed on-chain; observation payloads stay off-chain and enter only as Merkle-leaf commitments.",
+  "description": "A signed evidence batch anchored per epoch via post_evidence_epoch. Data minimization (Invariant 5): this structure carries ONLY commitments, coarse cohort labels, integer-scaled aggregate counts, time ranges, and signatures. Raw telemetry, exact coordinates, timestamps of individual readings, and any personal data are FORBIDDEN and have no property to hold them. The header is what gets hashed on-chain; observation payloads stay off-chain and enter only as Merkle-leaf commitments. Per serialization.md §2, NO JSON number tokens appear in a hashed artifact: every numeric quantity here is carried as a canonical integer-scaled decimal STRING (unsigned '^(0|[1-9][0-9]*)$', or '^[1-9][0-9]*$' where the value MUST be >= 1), and all object keys are ASCII. Each batch object is itself a leaf of the evidence Merkle tree (serialization.md §6.5). Version this schema; changes are versioned migrations, never silent edits.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -27,9 +27,9 @@
       "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
     },
     "epoch_index": {
-      "description": "Monotonic epoch counter within the experiment, starting at 0.",
-      "type": "integer",
-      "minimum": 0
+      "description": "Monotonic epoch counter within the experiment, starting at 0. Canonical unsigned integer string (serialization.md §2; count/index class, scale 1).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
     },
     "cohort_id": {
       "description": "Coarse cohort label consistent with manifest.estimand.cohort_definition. Opaque and coarse (e.g. a geohash prefix or predefined cluster id) — never exact coordinates (Invariant 5).",
@@ -42,8 +42,16 @@
       "additionalProperties": false,
       "required": ["start", "end"],
       "properties": {
-        "start": { "type": "integer", "minimum": 0 },
-        "end": { "type": "integer", "minimum": 1 }
+        "start": {
+          "description": "Inclusive start, integer unix seconds. Canonical unsigned integer string (serialization.md §2; seconds class, scale 1). Semantic bound: start < end, enforced by producer/verifier.",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "end": {
+          "description": "Exclusive end, integer unix seconds, MUST be >= 1 and > start. Canonical unsigned integer string (serialization.md §2; seconds class, scale 1).",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        }
       }
     },
     "signer_set_commitment": {
@@ -54,9 +62,13 @@
       "properties": {
         "algo": { "const": "sha256" },
         "merkle_root_hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "signer_count": { "type": "integer", "minimum": 1 },
+        "signer_count": {
+          "description": "Number of distinct signer pubkeys committed by merkle_root_hex, MUST be >= 1. Canonical unsigned integer string (serialization.md §2; count class, scale 1).",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
         "leaf_scheme": {
-          "description": "Merkle leaf construction over signer identities.",
+          "description": "Merkle leaf construction over signer identities. Leaf ordering and construction are pinned in serialization.md §6.5 (signer sub-commitment): leaves sorted ascending by the 32-byte pubkey.",
           "const": "sha256(0x00||'signer'||signer_pubkey_be32)"
         }
       }
@@ -69,9 +81,13 @@
       "properties": {
         "algo": { "const": "sha256" },
         "merkle_root_hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "leaf_count": { "type": "integer", "minimum": 1 },
+        "leaf_count": {
+          "description": "Number of observation leaves committed by merkle_root_hex, MUST be >= 1. Canonical unsigned integer string (serialization.md §2; count class, scale 1).",
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
         "leaf_scheme": {
-          "description": "Merkle leaf construction over observation content commitments (see $defs.observation_leaf).",
+          "description": "Merkle leaf construction over observation content commitments (see $defs.observation_leaf). Leaf ordering and construction are pinned in serialization.md §6.5 (observation sub-commitment): leaves sorted ascending by the 32-byte observation content commitment.",
           "const": "sha256(0x00||'obs'||observation_commitment_be32)"
         }
       }
@@ -83,24 +99,24 @@
       "required": ["accepted_count", "rejected_count", "distinct_signers"],
       "properties": {
         "accepted_count": {
-          "description": "Number of observations accepted after validation. Integer.",
-          "type": "integer",
-          "minimum": 0
+          "description": "Number of observations accepted after validation. Canonical unsigned integer string (serialization.md §2; count class, scale 1).",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
         },
         "rejected_count": {
-          "description": "Number rejected by validation. Integer.",
-          "type": "integer",
-          "minimum": 0
+          "description": "Number rejected by validation. Canonical unsigned integer string (serialization.md §2; count class, scale 1).",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
         },
         "distinct_signers": {
-          "description": "Distinct signing keys represented. Integer. MUST be <= signer_set_commitment.signer_count.",
-          "type": "integer",
-          "minimum": 0
+          "description": "Distinct signing keys represented. Canonical unsigned integer string (serialization.md §2; count class, scale 1). Semantic bound: <= signer_set_commitment.signer_count, enforced by producer/verifier.",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
         },
         "quality_score_micro_sum": {
-          "description": "Optional integer-scaled sum of per-observation quality scores at 1e-6, used by the frozen weight_formula. Integer-scaled; never a float.",
-          "type": "integer",
-          "minimum": 0
+          "description": "Optional sum of per-observation quality scores, micro-scaled at 1e6 (real = stored / 1e6), used by the frozen weight_formula. Canonical unsigned integer string (serialization.md §2; micro class); never a float.",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
         }
       }
     },
@@ -131,9 +147,9 @@
         "signer_pubkey": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" },
         "cohort_id": { "type": "string", "pattern": "^[a-z0-9_-]{1,64}$" },
         "time_block_index": {
-          "description": "Index of the time block within the experiment window (integer). Coarse; not a per-reading wall-clock timestamp.",
-          "type": "integer",
-          "minimum": 0
+          "description": "Index of the time block within the experiment window. Coarse; not a per-reading wall-clock timestamp. Canonical unsigned integer string (serialization.md §2; index class, scale 1).",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
         },
         "payload_commitment_hex": {
           "description": "SHA-256 commitment to the raw signed reading, which is held off-chain by the coordinator/participant. The raw reading is NEVER placed in any protocol artifact.",

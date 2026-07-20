@@ -8,19 +8,15 @@ metadata:
 The four M1 open questions are now RESOLVED in-spec (2026-07-17 ratification); see
 [[resolved-decisions]]. Remaining open items, all M2/M3 scope:
 
-1. **Evidence artifact is NOT yet number-free.** `evidence.schema.json` + `examples/evidence.example.json`
-   still use JSON integer tokens (epoch_index, time_range, signer_count, leaf_count, aggregate_summary
-   counts). The ratified serializer (`serialization.md` §2) FORBIDS number tokens in any hashed
-   artifact and the verifier reference RAISES on ints — so evidence cannot currently be canonicalized.
-   **Why:** deferred deliberately — no evidence golden root exists yet, and the evidence Merkle-tree
-   leaf sort key is itself still `[RATIFY]` (serialization.md §6.2), both M3 scope.
-   **How to apply:** when evidence roots land (M3), migrate every evidence numeric field to canonical
-   integer-scaled strings (same regexes as manifest) and pin the evidence leaf sort key in
-   serialization.md §6.2 IN THE SAME change. Flagged to orchestrator during M1 ratification.
+1. **RESOLVED (2026-07-20).** Evidence artifact is now number-free and serializer-conformant, and the
+   evidence leaf sort keys are pinned (serialization.md §6.5). See [[resolved-decisions]]. Done before
+   the M1 freeze tag. Nothing left here.
 
-2. **Merkle leaf sort keys for participant/evidence/reward trees** are unpinned (serialization.md
-   §6.2). Only the assignment tree (sort by cohort_id) is fixed. Must be pinned before each tree's
-   first golden root is committed (M2 participant/assignment done; evidence/reward M3).
+2. **Merkle leaf sort keys — PARTIALLY resolved.** assignment (cohort_id) and evidence (§6.5, three
+   trees, by 32-byte key) are PINNED. Still unpinned: **participant** (recommendation: participant id
+   asc — pin before first participant golden root, M2) and **reward** (DEFERRED to M3: reward leaf
+   identity fields = recipient key + claim binding are reward-compiler output not yet specced;
+   reward-policy.md fixes only the amount `leaf_i`). Pin each before its first golden root.
 
 3. **Switchback & matched-cluster ASSIGNMENT DERIVATION rules** are unpinned (serialization.md §7.4).
    Only bernoulli + fixed_count PRF derivations exist. Needed before an M2 switchback assignment root.

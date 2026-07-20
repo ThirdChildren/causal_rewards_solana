@@ -28,6 +28,8 @@ reproduced by `verifier-cli/reference/canonical.py`; CJSON byte length 3852):
 (Superseded PROVISIONAL hashes were `sha256:838f...dfca` / `6d39...67ed`, computed with bare integer
 tokens; regenerated because the ratified serializer forbids number tokens entirely.)
 
-Both schema examples still validate (jsonschema Draft202012); manifest example is now fully
-number-free so it round-trips through the verifier reference serializer. See [[open-questions]] for
-remaining (M2/M3) items and [[resolved-decisions]] for the ratification rationale.
+Both schema examples validate (jsonschema Draft202012). Manifest AND evidence examples are now fully
+number-free and round-trip through the verifier reference serializer without raising (evidence CJSON =
+1040 bytes, sha256 901b08d5...; migrated 2026-07-20, no golden root committed for it yet). Evidence
+Merkle leaf sort keys pinned in serialization.md §6.5. See [[open-questions]] for remaining (M2/M3)
+items and [[resolved-decisions]] for rationale.

@@ -71,10 +71,10 @@ schema and be added here in the same versioned change.
 
 | Class | Scale (`stored / scale`) | Field-name convention | Fields (non-exhaustive) |
 | --- | --- | --- | --- |
-| **micro** | 1e6 | `*_micro` | `confidence_level_micro`, `critical_value_micro`, `treated_fraction_micro`, `quality_score_micro`, `uptime_micro` |
+| **micro** | 1e6 | `*_micro` | `confidence_level_micro`, `critical_value_micro`, `treated_fraction_micro`, `quality_score_micro`, `uptime_micro`, `quality_score_micro_sum` (evidence) |
 | **ppm** (assignment params) | 1e6 | `*_ppm` | `treat_fraction_ppm` |
 | **base units** (money) | 1 (mint-native integer) | `*_base_units`, reward-curve outputs, reward leaves | `budget_base_units`, `challenge_bond_base_units`, reward-curve output axis, per-participant reward leaves |
-| **count / seconds / index** | 1 | plain integer semantics | `created_at`, `cohort_count`, `block_seconds`, `block_count`, all `windows.*`, `minimum_sample.*`, `threshold`, `treatment_count`, `df` |
+| **count / seconds / index** | 1 | plain integer semantics | `created_at`, `cohort_count`, `block_seconds`, `block_count`, all `windows.*`, `minimum_sample.*`, `threshold`, `treatment_count`, `df`; evidence: `epoch_index`, `time_range.start`, `time_range.end`, `signer_count`, `leaf_count`, `accepted_count`, `rejected_count`, `distinct_signers`, `time_block_index` |
 | **scale exponent** | 1 (the value *is* an exponent) | `effect_scale`, `weight_scale` | `effect_scale`, `weight_scale` (allowed range −12…0; a value `e` means the paired quantity is expressed at resolution `1e(e)`) |
 
 Default statistical resolution is **micro (1e6)**; the simulator's float-free content hasher uses
@@ -189,8 +189,19 @@ type, so a leaf from one tree can never be replayed into another:
 | --- | --- |
 | participant | `CRP:participant:v1` |
 | assignment | `CRP:assignment:v1` |
-| evidence | `CRP:evidence:v1` |
+| evidence (epoch tree over batch headers) | `CRP:evidence:v1` |
 | reward | `CRP:reward:v1` |
+
+Two internal sub-commitment trees live *inside* an evidence batch header (their roots are the
+`signer_set_commitment.merkle_root_hex` and `observations_commitment.merkle_root_hex` fields). They
+use their own short leaf-domain tags, fixed by the `leaf_scheme` `const`s in `evidence.schema.json`
+and pinned in §6.5; each still follows the §6.1 node formulas (`0x00`/`0x01` prefixes, promotion,
+empty-tree sentinel):
+
+| Sub-commitment | Leaf domain (ASCII, inside the `0x00` leaf preimage) |
+| --- | --- |
+| signer set | `signer` |
+| observation set | `obs` |
 
 ### 6.2 Leaf ordering (data-derived, not insertion order)
 
@@ -198,9 +209,14 @@ Leaf order is a canonical sort key **derived from the leaf data**, so two produc
 set always build the identical tree. Per tree type:
 
 - **assignment:** sort by `cohort_id` ascending (UTF-16 code-unit of the NFC-normalized id).
-- **participant / evidence / reward:** sort key is pinned when each schema lands (recommendation of
-  record: participant → participant id; reward → recipient/leaf id; evidence → batch sequence then
-  record id). These MUST be fixed here before their first golden root is committed (M2/M3).
+- **evidence:** PINNED — see §6.5 (evidence epoch tree and its two sub-commitments).
+- **participant:** sort key is pinned when the participant golden root lands (recommendation of
+  record: participant id ascending, UTF-16 code-unit of the NFC-normalized id). MUST be fixed here
+  before the first participant golden root is committed (M2).
+- **reward:** DEFERRED to M3 — the reward leaf's identity fields (recipient key and single-use claim
+  binding) are reward-compiler output not yet specified in `reward-policy.md` (which currently fixes
+  only the leaf *amount* `leaf_i`), so there is no leaf identity to sort on yet. MUST be pinned here
+  before the first reward golden root is committed.
 
 ### 6.3 Odd-node handling
 
@@ -213,6 +229,83 @@ that class. The on-chain verifier MUST implement promotion identically.
 
 The root of an empty tree is **32 zero bytes** — an unmistakable "nothing committed" sentinel (never
 `SHA-256(DOMAIN_TAG)`).
+
+### 6.5 Evidence trees (leaf form + ordering, PINNED)
+
+Evidence involves three §6.1-shaped Merkle trees. All three use the §6.1 node formulas (prefixes,
+promotion, empty-tree sentinel). Each is defined by (a) its leaf preimage and (b) a data-derived
+**total order** with an explicit tie-break, so two producers holding the same set build byte-identical
+trees and roots (Invariant 2). No new encoder is introduced — leaves are either canonical JSON bytes
+(§3) or fixed-width raw byte fields.
+
+**Common ordering rule (cheap on-chain and off-chain).** Within each tree the leaves are ordered
+**ascending, byte-lexicographic, by the tree's declared sort key**. Because every candidate sort key
+below is a fixed-width byte string (a 32-byte hash or a 32-byte pubkey/commitment), ordering is a
+plain unsigned big-endian byte comparison — no field parsing, no NFC, no numeric-string comparison,
+and it is identical in a Solana program (`sol_memcmp` over 32-byte arrays) and in an off-chain
+pipeline. A verifier checks the committed leaf list is strictly monotonic under this key. This was
+chosen over a semantic multi-field key (`cohort_id`, then `time_range.*`) precisely to avoid
+numeric-string comparison of integer-string fields (`"10"` vs `"9"`), which is a cross-language
+determinism footgun; the batch header still binds those semantic fields, so nothing auditability-wise
+is lost.
+
+**1. Evidence epoch tree — `DOMAIN_TAG = CRP:evidence:v1`.** Leaves are signed evidence *batch
+headers*: one leaf per `evidence.schema.json` instance in the epoch.
+
+```
+canonical_leaf_bytes(batch) = CJSON(batch)      # the full batch object, INCLUDING batch_signature
+leaf_hash(batch)            = SHA-256( 0x00 || "CRP:evidence:v1" || canonical_leaf_bytes(batch) )
+```
+
+Including `batch_signature` binds the producer signature into the leaf. **Sort key: `leaf_hash`
+ascending.** Tie-break / totality: two leaves can share a `leaf_hash` only if they are byte-identical
+batch objects; a producer MUST NOT place two byte-identical batch leaves in one epoch (hard error),
+so the order is total. Rationale for hashing the whole header rather than sorting on a natural
+scalar: a batch header is a composite object with no single monotonic identifier in the minimized
+schema (adding a record-id would be surplus data and an insertion-order proxy, violating the
+data-derived rule); `leaf_hash` is fully data-derived and needs no field parsing.
+
+**2. Observation sub-commitment — leaf domain `obs`** (root = `observations_commitment.merkle_root_hex`).
+Leaves are the per-observation content commitments (each the 32 raw bytes of a
+`$defs.observation_leaf.payload_commitment_hex`):
+
+```
+observation_commitment_be32 = the 32 raw bytes decoded from payload_commitment_hex
+leaf_hash                    = SHA-256( 0x00 || "obs" || observation_commitment_be32 )
+```
+
+**Sort key: `observation_commitment_be32` ascending** (the "sorted set" of content commitments).
+Tie-break / totality: identical commitments are the same off-chain reading; a batch MUST NOT list a
+content commitment twice (hard error), so the order is total. Unlike the base58 `signer_pubkey`
+(item 3), the raw-byte derivation here needs no extra length pin: `payload_commitment_hex` is
+schema-constrained to `^[0-9a-f]{64}$` (64 lowercase hex characters ≡ exactly 32 bytes), so the
+decode is fixed-width by construction. The same holds for both `merkle_root_hex` fields
+(`^[0-9a-f]{64}$`).
+
+**3. Signer set sub-commitment — leaf domain `signer`** (root = `signer_set_commitment.merkle_root_hex`).
+Leaves are the 32-byte ed25519 signer pubkeys (`signer_pubkey_be32` = the 32 raw bytes decoded from
+the base58 `signer_pubkey`). The base58 variant is the Bitcoin/Solana alphabet
+(`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`, as already implied by the schema
+regex `^[1-9A-HJ-NP-Za-km-z]{32,44}$`), and `signer_pubkey` MUST base58-decode to EXACTLY 32 bytes;
+any other decoded length (e.g. 31 or 33 bytes, which the `{32,44}`-*character* regex does not
+exclude) is a hard error and the leaf is rejected. This length pin is mandatory because the sort
+key is a fixed-width 32-byte comparison (`sol_memcmp` on-chain / big-endian byte compare off-chain,
+per §6.5's common ordering rule): a non-32-byte `signer_pubkey_be32` would diverge on-chain vs
+off-chain and would admit an invalid pubkey (Invariant 2).
+
+```
+leaf_hash = SHA-256( 0x00 || "signer" || signer_pubkey_be32 )
+```
+
+**Sort key: `signer_pubkey_be32` ascending** (the "sorted set of signer pubkeys" the schema
+references; `signer_pubkey_be32` is exactly the 32-byte base58 decode required above — a leaf whose
+`signer_pubkey` does not base58-decode to exactly 32 bytes is rejected before ordering). Tie-break /
+totality: a pubkey is a set member; it MUST NOT appear twice (hard error), so the order is total.
+
+`epoch_index` is fixed within one epoch tree; the epoch tree therefore commits exactly the batch
+set of that epoch. The two sub-commitment roots are ordinary string fields inside each batch header,
+so their determinism (via the ordering above) is what makes the enclosing evidence `leaf_hash`
+deterministic in turn.
 
 ## 7. Seed commitment & assignment derivation
 

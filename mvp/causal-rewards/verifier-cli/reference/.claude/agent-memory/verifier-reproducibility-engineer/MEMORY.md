@@ -1,0 +1,1 @@
+- [Evidence serialization pinning](evidence-serialization-pinning.md) — §6.5 three-tree Merkle rules, evidence.example CJSON anchor (1040 B / 901b08d5…), open base58-decode advisory

@@ -1,0 +1,1 @@
+- [Resolved: base58 signer decode length](resolved-base58-signer-decode-length.md) — §6.5 signer leaf sort key pins base58 alphabet + decoded len==32 (hard error); prose-only, no hash change

@@ -1,0 +1,1 @@
+- [Evidence Merkle scheme (frozen §6.5)](merkle-evidence-scheme.md) — three trees, 32-byte byte-lexicographic sort keys, what the off-chain pipeline must enforce

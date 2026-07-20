@@ -13,10 +13,25 @@ metadata:
 
 **M1 acceptance gate — ALL CLEARED:** (1) reproducible baseline sim ✅ 31135b85…; (2) schemas validate + state machine complete ✅; (3) serialization ratified §3 + golden regenerated ✅; (4) verifier reproduces final golden hash ✅ 74e0bb….
 
-**CARRIED to M3 (not freeze blockers, but blockers before dependent work):**
-- evidence.schema.json + example still use JSON integer tokens (10 fields) → ratified serializer rejects ints. MUST migrate to number-strings AND pin evidence Merkle leaf sort key (serialization.md §6.2 deferred) in same change before ANY evidence root is committed. Owner: protocol-architect + backend-data-engineer + verifier.
-- simulator src/depin_sim/canonical.py latent divergence: uses ensure_ascii + no NFC. Byte-identical for ASCII only; diverges on non-ASCII (escaping, NFC, key order). Reconcile before simulator emits a cross-checked golden hash. Owner: causal-inference-engineer.
-- serialization.md §6.2 evidence/reward Merkle leaf sort keys + switchback assignment-derivation rules still deferred → pin before M2/M3 code depends on them.
+**Recovery doc:** `/CONTEXT_HANDOFF.txt` at repo root — the cold-start recovery document. Keep it updated at end of every milestone and whenever a ratified hash / frozen artifact / carried discrepancy changes. Treat as deliverable.
+
+**Freeze tag spec-v1-frozen:** NOT yet placed. Gated on discrepancy #1 fix + verifier confirm. Tag = spec RELEASE discipline, DISTINCT from freeze-before-reveal runtime invariant — do not conflate.
+
+**Discrepancy #1 (evidence schema): ARCHITECT FIX DONE + orchestrator-verified. Awaiting verifier + backend sign-off, THEN tag.** Architect migrated all 10 evidence numeric fields to number-strings, pinned evidence leaf sort key in serialization.md §6.5 (3 trees: evidence-epoch CRP:evidence:v1 / obs / signer; each ascending by 32-byte byte-lexicographic key: leaf_hash/content-commitment/pubkey; dup=hard error; sol_memcmp on-chain). Orchestrator verified: 0 integer tokens, evidence example validates, serializer accepts (1040 bytes sha256 901b08d5e9aee2cb9861baed18051a9c9b9feeb444502c64b99163d2e51fa75b), manifest golden UNCHANGED 74e0bb…. Reward-tree leaf order still DEFERRED to M3 (reward-compiler output not yet specced); participant-tree order pending M2. Confirm round: verifier (a1f5d9b4…) serializer/determinism STILL RUNNING; backend (a3bf7169…) SIGNED OFF with ONE BLOCKING CONDITION.
+
+**Backend blocking condition (route to architect before tag):** §6.5 must add normative sentence — `signer_pubkey` MUST base58-decode to exactly 32 bytes; any other decoded length = hard error. Reason: base58 regex `{32,44}` chars does NOT pin decoded byte length; variable-length off-chain compare vs fixed 32-byte on-chain sol_memcmp can diverge (invariant 2 gap). One-line clarification, not a redesign. The two hex-derived keys (leaf_hash, content commitment = 64 lowercase hex) are already exactly 32 bytes — fine.
+
+**Backend non-blocking M3 notes (recorded, do NOT gate tag):** (a) signed batch is a pipeline INPUT not regenerated — pin signature bytes in golden vectors (verifier); (b) pipeline must recompute+verify header_hash_hex + batch_signature on ingest, never trust producer-supplied hash; (c) same (experiment_id,epoch_index,cohort_id) from two producers = two distinct leaves, both admitted — dedup/selective-reporting handled at ingestion (event-nonce + correlation), tree does NOT dedup; (d) empty epoch tree = 32-zero root must reconcile with missingness policy; (e) audit-bundle Parquet rows written in canonical leaf-sort order; semantic (cohort,time) exposed only as secondary off-chain index. Header-hash = SHA256(CJSON(batch minus batch_signature)); epoch leaf = CJSON(full batch incl signature) — non-circular.
+
+**Verifier (a1f5d9b4) CONFIRMED PASS all 3 items** — independently reproduced evidence CJSON 1040 bytes sha256 901b08d5… (matches backend + orchestrator), §6.5 leaf order = deterministic total order, nothing blocks M3 golden roots. Verifier ALSO flagged the signer_pubkey base58/len-32 point but called it non-blocking (says decoded-bytes sort key has no real nondeterminism; will enforce len==32 in verifier regardless).
+
+**DECISION: treat signer_pubkey len-32 as BLOCKING (one-line spec fix before tag).** Two independent reviewers flagged it; on-chain sol_memcmp fixed 32-byte vs variable off-chain decode = real divergence risk + invalid-pubkey admission. Cheap insurance. Routed to architect (task pending).
+
+**PLAN:** architect adds §6.5 sentence (name base58 variant = Bitcoin/Solana alphabet; signer_pubkey MUST base58-decode to exactly 32 bytes else hard error). Then orchestrator re-verifies (validate + serializer + manifest unchanged), THEN commit + tag spec-v1-frozen, THEN fire M2.
+
+**Discrepancy #2 (simulator canonical.py NFC/ensure_ascii): CARRIED, owner causal-inference-engineer, fix before sim emits any cross-checked golden hash (M3).**
+
+**Still deferred in serialization.md:** reward-tree leaf sort key (may depend on M3 reward-compiler output); switchback assignment-derivation rules.
 
 **Why:** Grant-scoped 20-week MVP (~95k USDC). Scope discipline is a feature. Devnet only.
 

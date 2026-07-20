@@ -1,0 +1,207 @@
+================================================================================
+CONTEXT_HANDOFF.txt  —  Causal Rewards Protocol MVP
+Recovery document for a fresh Claude Code session with no memory of this work.
+Last updated: 2026-07-20 (end of M1 / start of M2).
+Maintainer: orchestrator agent. THIS FILE IS A DELIVERABLE — keep it current.
+================================================================================
+
+PROJECT ONE-LINER
+-----------------
+Open-source measurement + settlement layer for Solana DePIN networks. Beyond
+proof-of-contribution, it asks: did a contribution cause measurable additional
+value vs a credible counterfactual ("Proof of Additionality")? Grant-scoped MVP,
+20 weeks, devnet only. Full context: mvp/CLAUDE.md (the source of truth for
+invariants, layout, milestones). Protocol semantics live in
+mvp/causal-rewards/specs/ and WIN over any implementation.
+
+CURRENT STATUS
+--------------
+Milestone: M1 ACCEPTED (2026-07-20). Spec FROZEN at git tag spec-v1-frozen.
+Discrepancy #1 (evidence schema) RESOLVED and signed off by architect + verifier +
+backend before the tag. M2 authorized and being delegated (programs + SDK).
+
+================================================================================
+MILESTONE LEDGER
+================================================================================
+M1 — Spec & benchmark (wk 1-4) .............................. DONE (accepted)
+  Acceptance test: frozen public spec + reproducible baseline simulator run.
+  How verified (by orchestrator, independently, not on agent word):
+    - Both JSON schemas validate their canonical examples (Draft 2020-12).
+    - state-machine.md covers all 11 instructions + 8 accounts, no dangling states.
+    - Invariants enforced STRUCTURALLY in schema: devnet const, geo_cohort_time_block
+      const, seed_commitment-only (no raw seed), evidence additionalProperties:false,
+      conservative-payout formula exact.
+    - Canonical serialization ratified into specs/serialization.md (byte-level).
+    - Manifest golden hash reproduced from verifier-cli/reference/canonical.py over
+      specs/examples/manifest.example.json -> matches (byte_len 3852).
+    - Simulator: `make determinism` + 2 fresh-process runs -> identical content hash;
+      41 tests pass.
+
+M2 — Programs & SDK (wk 5-9) ................................ NOT STARTED (authorized, gated on freeze tag)
+  Acceptance test: devnet deploy + local integration tests (happy + adversarial)
+  + deterministic assignment vectors agreeing across on-chain program, TS SDK, and
+  verifier reference. Every program/claim-logic change routed through security-reviewer.
+
+M3 — Evidence & causal engine (wk 10-14) ................... NOT STARTED
+  Acceptance test: independent reproduction of result-artifact hash + reward roots
+  from an audit bundle, with zero network access, no trust in coordinator/evaluator.
+
+M4 — Pilot, hardening, release (wk 15-20) .................. NOT STARTED
+  Acceptance test: tagged OSS release + public dashboard + benchmark report +
+  resolved security-review findings.
+
+MILESTONE GATING: do not start a milestone until the prior one's acceptance test
+passes and is demonstrated. Frozen M1 spec is a hard dependency for M2 and M3.
+
+================================================================================
+RATIFIED HASHES  (re-read from disk 2026-07-20 — copy verbatim, never transcribe
+from conversation text)
+================================================================================
+Source file: mvp/causal-rewards/specs/manifest.golden.md
+  hash function          : SHA-256
+  CJSON byte length      : 3852
+  manifest_golden_sha256 : 74e0bb825013fcd4a2327b234a5f44c48cd709e7a3025cd30a3b26ace68f81b2
+  reward_curve_hash      : sha256:14b0ec34d3653a5857ceef10b9bdfee264a6865172c2b2cfb1d2405fae856d41
+  (manifest_golden_sha256 = SHA-256(CJSON(entire manifest)), raw lowercase hex, no prefix.
+   This is what experiment-registry stores as the frozen manifest hash.)
+
+Source file: mvp/causal-rewards/specs/examples/evidence.example.json (via verifier reference)
+  evidence example CJSON byte length : 1040
+  evidence example CJSON sha256      : 901b08d5e9aee2cb9861baed18051a9c9b9feeb444502c64b99163d2e51fa75b
+  (Schema+serialization conformance fixture only. NOT an evidence Merkle root — the first
+   evidence golden root is owned by verifier + backend in M3. merkle_root_hex values in the
+   example are placeholders.)
+
+Source file: mvp/causal-rewards/test-vectors/serialization/index.json
+  ser-01-key-ordering        : 0dee9644997cb0f2ab9ecfedb4a89d9591614d76ff89406485caaba5b335c8ab
+  ser-02-unicode-nfc         : 4832d3870bbdb8501b19247c7b513d87619e5e447660e455e6f97ba3671ec489
+  ser-03-decimal-scaling     : 575f9916d1ed942f7a63ad7413ab048d2444c84d5fc9cbc3d972c43d89d04be4
+  ser-04-control-and-escapes : 7cae8b1d7380084e50cb132cce496510e522eb3835f61d1c436352c44700a41b
+  ser-05-nested-mixed        : 99f11b7f139f2afee315a5277a280feda55aedad60be2b204700f24154063c55
+
+Source file: mvp/causal-rewards/test-vectors/assignment/index.json
+  assign-01-bernoulli-p50   root=c229b5ccfdf447900526a45afac31a009c6348685b135edfe2eb6139ef1b914d
+                            seed_commitment=f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c
+  assign-02-fixed-count-2of5 root=940b42e0edc6f8d74ffb91f8c3b377e43bd9190e6ea8ce2a9fed9a7d816aa603
+                            seed_commitment=e2f5ee3ae684b7fef4639a71a9f3318c792a8c2f21b8df349ffcb6d035fb884c
+  assign-03-bernoulli-p25   root=c463b3f14f812250b67cfbf3f1f33a5804434759d89c0d7469234a5c9e3b9f56
+                            seed_commitment=59852177fe866b8ae83912b8bcebf804279d51308cadd69275aed091abe2d0b3
+
+Simulator baseline content hash (NOT a spec golden; internal reproducibility check):
+  31135b85f4c18e4022b58f7d0dbfa1ef018990b29990b331a0048104e165dc67
+  (from `make determinism` in mvp/causal-rewards/simulator/)
+
+NOTE: roots.json (audit-bundle result + reward roots) does NOT exist yet — that is M3.
+When it exists, add its hashes here and re-read them from disk.
+
+================================================================================
+FROZEN ARTIFACTS + GIT
+================================================================================
+spec_version in manifest: 1.0.0 (specs/examples/manifest.example.json)
+Remote: origin https://github.com/ThirdChildren/causal_rewards_solana.git (branch main)
+Freeze tag: spec-v1-frozen — PLACED. It is an annotated tag recording the ratified hashes.
+  Resolve the frozen commit with: git rev-list -n1 spec-v1-frozen
+  Inspect the recorded hashes with: git show spec-v1-frozen
+
+IMPORTANT — TWO DIFFERENT "FREEZE" CONCEPTS, DO NOT CONFLATE:
+  1. Git tag spec-v1-frozen = RELEASE DISCIPLINE for the protocol specification.
+     After this tag, spec changes are versioned migrations (v1.1, v2), never silent
+     edits. It is a repo/process control.
+  2. Freeze-before-reveal INVARIANT (CLAUDE.md #1) = a RUNTIME property of an individual
+     experiment manifest: the manifest is frozen + hashed before the assignment seed is
+     revealed and before any outcome analysis. It is enforced on-chain per experiment.
+  These are unrelated. A future session must not treat the git tag as the invariant.
+
+================================================================================
+M1 OPEN QUESTIONS — ALL FOUR RESOLVED
+================================================================================
+Q1 Serialization: verifier proposal adopted wholesale, now normative in
+   specs/serialization.md §2/§3. Byte-level: RFC 8785 JCS subset, UTF-8, NFC, ASCII-only
+   keys, UTF-16 code-unit key order, numbers-as-strings (no JSON number tokens; integer-
+   scaled fixed-point, default micro 1e6, round-half-to-even), SHA-256, domain-separated
+   Merkle (leaf=SHA256(0x00||TAG||bytes), node=SHA256(0x01||L||R), data-derived leaf
+   order, odd-node PROMOTION, empty root = 32 zero bytes), two-step seed commit/reveal.
+Q2 student_t df: resolved -> manifest field analysis_plan.df (unsigned-int string),
+   REQUIRED iff critical_value_reference=student_t, FORBIDDEN for normal_approx.
+   Recorded in: specs/manifest.schema.json + examples/manifest.example.json.
+Q3 weight_formula grammar: resolved -> named grammar CRP-WS1 (normalized weighted sum
+   over a closed attribute vocabulary; products must be pre-declared compound attributes).
+   Recorded in: specs/reward-policy.md. Evaluator implementation deferred to M3.
+Q4 switchback/interference: resolved -> design.parameters.interference_assumption (enum)
+   always; carryover_blocks + washout_blocks required when template=switchback. Simulator
+   ground-truth knobs (true_effect, interference, confounding, Sybil params) explicitly
+   BANNED from the manifest schema. Recorded in: specs/manifest.schema.json + example.
+
+================================================================================
+CARRIED DISCREPANCIES
+================================================================================
+| # | Description                                              | Owner                        | Fix by | Status       |
+|---|----------------------------------------------------------|------------------------------|--------|--------------|
+| 1 | evidence.schema.json used JSON integer tokens; evidence  | protocol-architect (verifier +| BEFORE | RESOLVED     |
+|   | Merkle leaf sort key unpinned. FIXED: 10 numeric fields  | backend signed off)          | FREEZE | 2026-07-20   |
+|   | -> number-strings; evidence leaf sort keys pinned in     |                              | TAG    | (pre-tag)    |
+|   | serialization.md §6.5 (3 trees, 32-byte byte-lex order,  |                              |        |              |
+|   | dup=hard error); signer_pubkey MUST base58-decode to     |                              |        |              |
+|   | exactly 32 bytes else hard error (§6.5).                 |                              |        |              |
+| 2 | simulator src/depin_sim/canonical.py uses ensure_ascii + | causal-inference-engineer     | before | CARRIED      |
+|   | no NFC. Byte-identical for ASCII only; diverges on non-  |                              | sim    | (open)       |
+|   | ASCII (escaping, NFC, key order). Reconcile against      |                              | golden |              |
+|   | serialization.md §3/§4 before sim emits any cross-checked|                              | hash   |              |
+|   | golden hash.                                             |                              | (M3)   |              |
+
+================================================================================
+INTERFACE / SERIALIZATION DECISIONS OTHER COMPONENTS DEPEND ON
+================================================================================
+- ONE canonical byte form governs every hash + Merkle root. Owner = specs/
+  (serialization.md). verifier-cli/reference/ is the conformance oracle; any component
+  that hashes/roots data MUST match it. Do not introduce a second encoder.
+- Numbers are strings everywhere in hashed artifacts (integer-scaled). Serializer raises
+  on int/float on purpose.
+- Hash = SHA-256 throughout (revisit compute-unit cost with solana-program-engineer at
+  M2; both SHA-256 and Keccak have Solana syscalls; not expected to change).
+- Merkle: domain-separated, odd-node promotion (avoids CVE-2012-2459), empty root = 32
+  zero bytes. Per-tree ASCII domain tags.
+- Seed: commitment = SHA256("CRP-seed-commit-v1"||seed) frozen pre-reveal; revealed
+  32-byte seed drives a length-prefixed PRF for assignment. On-chain program MUST verify
+  revealed seed against stored commitment (structural freeze-before-reveal).
+- Simulator assignment derivation is isolated in simulator/src/depin_sim/assignment.py
+  (placeholder ALPHA_DERIVATION) — swap to the canonical derivation at M2/M3.
+
+================================================================================
+EXPLICITLY NOT DONE YET
+================================================================================
+- No Solana program code (programs/ are README stubs). M2.
+- No SDK code (sdk/ stubs). M2.
+- No causal engine estimators / reward compiler (causal-engine/ stub). M3.
+- No full verifier CLI (only reference impl + vectors exist). M3.
+- No backend evidence pipeline / audit bundle / roots.json. M3.
+- No dashboard. M4.
+- Reward-tree + participant-tree Merkle leaf sort keys still deferred (serialization.md
+  §6.2): reward-leaf identity depends on M3 reward-compiler output; participant tree pending M2.
+- No devnet deployment. No mainnet/token/fee (never, by invariant 7).
+  (evidence.schema.json IS now serializer-conformant; evidence leaf sort key IS pinned §6.5.)
+
+================================================================================
+HOW TO RESUME
+================================================================================
+Start command (from repo root):
+  cd /home/stephl0xff/personale/grant_blk/causal_rewards_solana && claude
+
+First THREE things a new session must verify BEFORE touching code:
+  1. Reproduce the manifest golden hash from disk and confirm it equals the value in
+     specs/manifest.golden.md:
+       cd mvp/causal-rewards/verifier-cli/reference && python3 -c "import json,canonical; \
+       m=json.load(open('../../specs/examples/manifest.example.json')); \
+       print(canonical.sha256_hex(canonical.canonical_json_bytes(m)))"
+     Expect: 74e0bb825013fcd4a2327b234a5f44c48cd709e7a3025cd30a3b26ace68f81b2
+  2. Re-run the verifier vector self-check (must exit 0, all vectors match):
+       cd mvp/causal-rewards/verifier-cli/reference && python3 verify_vectors.py
+  3. Confirm the simulator determinism gate still holds:
+       cd mvp/causal-rewards/simulator && make setup && make determinism
+     (identical content hash across two runs).
+  Also read: mvp/CLAUDE.md, mvp/causal-rewards/specs/, and the orchestrator memory at
+  mvp/.claude/agent-memory/orchestrator/MEMORY.md.
+
+MAINTENANCE RULE: update this file at the end of every milestone and whenever a ratified
+hash, frozen artifact, or carried discrepancy changes. Treat it as a deliverable.
+================================================================================

@@ -36,6 +36,33 @@ Design decisions made in the M1 spec draft, with rationale (so future edits don'
   and no coordinate/telemetry/timestamp-per-reading field; even off-chain observation leaves hold
   only a `payload_commitment`. **Why:** Invariant 5 data minimization, enforced by absence.
 
+- **Evidence schema is now serializer-conformant (2026-07-20).** All 10 numeric evidence fields
+  migrated from JSON `integer` to canonical number-STRING form (same regexes as the manifest):
+  `epoch_index`, `time_range.start`, `time_range.end`, `signer_count`, `leaf_count`, `accepted_count`,
+  `rejected_count`, `distinct_signers`, `quality_score_micro_sum` (micro/1e6), and
+  `$defs.observation_leaf.time_block_index`. `end`/`signer_count`/`leaf_count` use `^[1-9][0-9]*$`
+  (>=1); the rest use `^(0|[1-9][0-9]*)$`; semantic bounds (start<end, distinct_signers<=signer_count)
+  documented per-field + producer/verifier-enforced. Added these fields to `serialization.md` §2.2
+  scale table. Example updated (all numerics as strings), still Draft-2020-12 valid, passes
+  `canonical.canonical_json_bytes` without raising (1040 CJSON bytes, sha256 901b08d5...). **Why:**
+  the ratified serializer RAISES on any int/float token, so evidence records (which become Merkle
+  leaves) could not be canonicalized/hashed before this. Closed BEFORE the M1 freeze tag; no evidence
+  golden root existed yet so no migration needed. Manifest golden UNCHANGED (74e0bb82..., 3852 bytes).
+
+- **Evidence Merkle leaf sort keys PINNED (serialization.md §6.5), resolving the §6.2 deferral.**
+  Three §6.1-shaped trees. (1) Evidence epoch tree, `DOMAIN_TAG CRP:evidence:v1`, leaves = full batch
+  headers, `leaf=CJSON(batch incl. batch_signature)`, ordered ascending by 32-byte `leaf_hash`;
+  (2) observation sub-commitment (leaf domain `obs`), ordered ascending by the 32-byte content
+  commitment; (3) signer-set sub-commitment (leaf domain `signer`), ordered ascending by the 32-byte
+  pubkey. All: byte-lexicographic on a fixed-width 32-byte key; duplicates are a hard error (total
+  order). **Why:** chose 32-byte-key byte-compare over a semantic (`cohort_id`, `time_range.*`) key to
+  avoid numeric-string comparison of integer-string fields (a cross-language footgun) and to make
+  on-chain ordering a plain `sol_memcmp` — cheap and identical on-chain and off-chain (Invariant 2).
+  No new encoder (leaves are CJSON bytes or raw 32-byte fields). REWARD-tree leaf ordering left
+  DEFERRED to M3: reward leaf identity fields (recipient key + single-use claim binding) are
+  reward-compiler output not yet specced (reward-policy.md fixes only the amount `leaf_i`).
+  Implemented by `backend-data-engineer`, checked by `verifier-reproducibility-engineer`.
+
 - **State machine:** self-loops (`reveal_seed`, `post_evidence_epoch`, `claim_reward`) keep
   `status` but are status-gated; `Evaluating → Final` directly when no challenge; `Challenged`
   only entered when a challenge exists; upheld `resolve_challenge` returns to `Evaluating`.
