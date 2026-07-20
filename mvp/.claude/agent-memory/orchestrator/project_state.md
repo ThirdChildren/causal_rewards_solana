@@ -15,9 +15,14 @@ metadata:
 
 **M2 component status:**
 - verifier assignment vectors + adversarial fixtures: DELIVERED 2026-07-20, ACCEPTED. 11 assignment vectors (roots unchanged for 01-03; added boundary p0/p1e6, count 0/n, n=1 base case, UTF-16 lexical trap assign-09, 16-cohort balanced, 7-cohort odd promotion) + 6 adversarial fixtures in test-vectors/adversarial/ (adv-01 invalid-seed-reveal SEED_COMMITMENT_MISMATCH, adv-02 EPOCH_INDEX_NOT_MONOTONIC, adv-03 DUPLICATE_EVIDENCE_LEAF, adv-04 STALE_EVALUATION_STATE_MISMATCH, adv-05 CONTAINER_DIGEST_MISMATCH, adv-06 NULLIFIER_ALREADY_USED). verify_vectors.py exit 0 (orchestrator ran). These define M2 gate: programs must reproduce roots + reject all 6 fixtures.
-- solana-program-engineer: RUNNING (4 programs). Given salt-free construction directly in prompt + serialization.md authority. NOTE: commit 1268cbc swept in this agent's in-flight WIP (Cargo.toml, crates/crp-crypto/) via git add -A while it was still running — partial, not verified/complete. Do NOT treat crp-crypto as done; run anchor build/test + verify against vectors when the agent reports, then commit final state.
-- sdk-engineer: HELD until IDL published.
-- security-reviewer: on path after program/claim changes.
+- solana-program-engineer: DELIVERED 2026-07-20, committed ff4521a. 4 programs (experiment-registry incl CPI status transitions + set_paused, evidence-registry, settlement, challenge) + crp-crypto shared crate. Orchestrator VERIFIED crp-crypto: cargo test -p crp-crypto 8/8 — reproduces golden seed commitment/PRFs/assignment roots 01-03, Merkle promotion, proof roundtrip. Agent reported anchor build exit 0 + 12 ts integration tests (happy+adversarial) green — NOT independently re-run (needs validator); MUST re-run at devnet acceptance gate. IDLs in idl/ (stable). Freeze-before-reveal structural (no raw-seed field; reveal recomputes commitment, rejects SeedCommitmentMismatch). Single-use claim via ClaimReceipt PDA init. Fees zero, devnet guard, CPI-authority PDAs, multisig.
+  DEPLOY NUANCE: default SBPFv0; fresh local test-validator force-activates SIMD-0500 (localnet-test.sh deactivates it); if devnet activates SIMD-0500 switch to --arch v3.
+  ON-CHAIN TEST GAP (follow-up): crp-crypto host tests cover only assign-01..03; add 04..11 boundary vectors. Integration covers the 6 adversarial cases per agent.
+- reward Merkle leaf preimage: PROVISIONAL in settlement (sha256(0x00||"CRP:reward:v1"||recipient32||amount_u64BE||leaf_index_u64BE)); §6.2 ratification IN FLIGHT (architect a86db05b). Blocks SDK claim encoding.
+- security-reviewer: RUNNING (a7a4e039) — read-only review of 4 programs + crp-crypto.
+- sdk-engineer: HELD until reward-leaf ratified (IDL already stable). Then build full SDK incl claim.
+
+**Salt erratum confirmed needed:** program agent independently flagged the same stale salt in state-machine.md — already fixed (commit 1268cbc). Good corroboration.
 
 **SPEC ERRATUM (in flight, architect ab7b47f):** state-machine.md §2 tx4 had STALE salted seed-commitment prose contradicting ratified serialization.md §7.2 (salt-free SHA-256("CRP-seed-commit-v1"||seed)). Doc erratum only — behavior unchanged. Architect fixing prose; MUST NOT touch manifest/hashed files (bumping manifest spec_version would break golden 74e0bb…). Tag spec-v1-frozen stays at 0954bf4; erratum is a later main commit, noted in handoff.
 

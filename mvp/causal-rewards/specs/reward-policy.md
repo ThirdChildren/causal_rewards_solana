@@ -99,7 +99,15 @@ leaf_i = 0                            otherwise
   (Invariant 4).
 
 Each `leaf_i` becomes a leaf in the reward Merkle tree; the reward root is what
-`finalize_distribution` locks, and `claim_reward` proves against.
+`finalize_distribution` locks, and `claim_reward` proves against. The leaf's byte layout and the
+tree's leaf ordering are RATIFIED in `serialization.md` §6.6: the leaf preimage is
+`SHA-256( 0x00 || "CRP:reward:v1" || recipient(32) || amount_base_units(u64 BE) || leaf_index(u64 BE) )`,
+and leaves are placed by `leaf_index` ascending, contiguous from 0. One residual is owned **here**:
+the compiler must fix a deterministic, data-derived rule that assigns each leaf its `leaf_index`
+(primary rank key `(recipient, amount_base_units)` is pinned in §6.6; a tie-break is needed only if a
+recipient can hold more than one leaf — i.e. if leaves are **not** aggregated to one per recipient).
+This M3 decision — aggregate-per-recipient vs one leaf per (recipient × cohort), and the resulting
+tie-break — MUST be recorded here and pinned in §6.6 before the first reward golden root is built.
 
 ### CRP-WS1 — the frozen weight-formula grammar
 

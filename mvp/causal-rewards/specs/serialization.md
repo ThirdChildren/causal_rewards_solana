@@ -213,10 +213,11 @@ set always build the identical tree. Per tree type:
 - **participant:** sort key is pinned when the participant golden root lands (recommendation of
   record: participant id ascending, UTF-16 code-unit of the NFC-normalized id). MUST be fixed here
   before the first participant golden root is committed (M2).
-- **reward:** DEFERRED to M3 — the reward leaf's identity fields (recipient key and single-use claim
-  binding) are reward-compiler output not yet specified in `reward-policy.md` (which currently fixes
-  only the leaf *amount* `leaf_i`), so there is no leaf identity to sort on yet. MUST be pinned here
-  before the first reward golden root is committed.
+- **reward:** PINNED — see §6.6 (reward leaf preimage + `leaf_index` ordering). Leaves are placed in
+  `leaf_index` order: ascending, contiguous from 0 (tree position `p` ⇒ `leaf_index == p`). Duplicate
+  or gapped `leaf_index` is a hard error. A single, clearly-scoped M3 residual remains (the tie-break
+  used to *assign* `leaf_index` when `(recipient, amount)` is not unique — §6.6); the leaf preimage
+  itself is fully pinned.
 
 ### 6.3 Odd-node handling
 
@@ -306,6 +307,93 @@ totality: a pubkey is a set member; it MUST NOT appear twice (hard error), so th
 set of that epoch. The two sub-commitment roots are ordinary string fields inside each batch header,
 so their determinism (via the ordering above) is what makes the enclosing evidence `leaf_hash`
 deterministic in turn.
+
+### 6.6 Reward tree (leaf form + ordering, RATIFIED)
+
+The reward tree is a §6.1-shaped Merkle tree over one leaf per reward entry produced by the Stage-2
+reward compiler (`reward-policy.md`). Its root is the `reward_root` that `finalize_distribution`
+locks and `claim_reward` proves against. Like the evidence sub-commitments (§6.5), a reward leaf is
+a **fixed-width raw-byte structure, NOT CJSON**: §2 (no JSON number tokens) and §3 (CJSON) do **not**
+apply to it; the §6.1 node formulas (`0x00`/`0x01` prefixes, promotion §6.3, empty-tree sentinel
+§6.4) do. `DOMAIN_TAG = CRP:reward:v1` (ASCII, §6.1 table).
+
+**Leaf preimage (RATIFIED, fixed width).** Field order, widths, and endianness are fixed exactly as
+below:
+
+```
+recipient          : 32 raw bytes  — the recipient's ed25519 Solana pubkey (its native 32-byte form)
+amount_base_units  :  8 bytes, u64 BIG-ENDIAN — mint-native base units (money, scale 1, §2.2)
+leaf_index         :  8 bytes, u64 BIG-ENDIAN — the leaf's 0-based tree position / nullifier key
+
+reward_leaf_content = recipient || amount_base_units_be || leaf_index_be          # exactly 48 bytes
+leaf_hash           = SHA-256( 0x00 || "CRP:reward:v1" || reward_leaf_content )    # preimage 1+13+48 = 62 bytes
+```
+
+Big-endian is chosen for `amount_base_units` and `leaf_index` to match the rest of this spec (§7.3
+PRF, §7.2 seed) and to guarantee cross-language hash determinism (Invariant 2). This is a raw-byte
+leaf, so the money value is carried as an 8-byte integer, not a decimal string — the §2 "no JSON
+number token" rule governs only CJSON artifacts and is not in scope here (mirroring the raw 32-byte
+`obs`/`signer` leaves of §6.5). Because the content is a constant 48 bytes at fixed offsets, the
+map `(recipient, amount_base_units, leaf_index) → leaf_hash` is injective, and the `0x00` leaf prefix
+plus the `CRP:reward:v1` domain tag give the §6.1 second-preimage / cross-tree separation with no
+length-ambiguity (there is nothing variable-length to misparse). This ratifies the settlement
+program's provisional layout **unchanged** (`crates/crp-crypto`: `reward_leaf_content` /
+`reward_leaf_hash`; `programs/settlement` `claim_reward`).
+
+**Ordering (resolves the §6.2 reward deferral).** Leaves are placed in the tree by `leaf_index`:
+**ascending and contiguous from 0** — the leaf at tree position `p` has `leaf_index == p`, with no
+gaps. All normative:
+
+- **Duplicate `leaf_index`** in one reward tree is a **hard error**. It both breaks the total order
+  and collides the per-experiment `ClaimReceipt` nullifier PDA `[b"claim", experiment,
+  leaf_index_le]`, which would render one of the colliding leaves permanently unclaimable.
+- **A gap** (any missing index in `0..N-1`) is a **hard error**; `leaf_index` values are exactly the
+  integers `0 … N-1` for an `N`-leaf tree.
+- The **empty reward tree** (`N = 0`, e.g. a fully-null distribution under `reward-policy.md`
+  Stage-1 step 4) has root = 32 zero bytes (§6.4). `finalize_distribution` then locks a zero root and
+  the whole budget is recoverable.
+
+Because position `== leaf_index`, `build_proof`/`verify_proof` (§6.1) address a leaf directly by its
+`leaf_index`, which is also the exact value `claim_reward` takes and the nullifier key — one integer
+identifies the leaf end-to-end.
+
+**`leaf_index` assignment (data-derived; one scoped M3 residual).** For the tree to be reproducible
+(Invariant 2), `leaf_index` MUST be a deterministic, **data-derived total ranking** of the compiler's
+final reward-leaf set — never insertion order, wall-clock, or unseeded iteration (the same anti-
+insertion-order rule as §6.2). The primary rank key is **PINNED now: ascending by `recipient`
+(unsigned big-endian 32-byte compare, i.e. `sol_memcmp` order), then ascending by
+`amount_base_units`**; `leaf_index` is the 0-based rank under this key. **RESIDUAL (M3, minimal and
+sole):** when the compiler's leaf-set shape does not make `(recipient, amount_base_units)` a unique
+key — e.g. if it emits one leaf per (recipient × cohort) rather than one aggregated leaf per
+recipient — a final tie-break sub-key is appended to the rank. That tie-break (equivalently: whether
+the leaf set is aggregated-per-recipient) is a `reward-policy.md` reward-compiler decision and MUST
+be fixed there and pinned here **before the first reward golden root is committed**. This residual
+does not touch the leaf *preimage* (fully pinned above); it only fixes how the compiler *numbers*
+leaves. The encoding pinned here therefore constrains the compiler no further than `reward-policy.md`
+already does: the compiler owns the leaf *values* `(recipient, amount_base_units)` (Stage 2) and this
+residual; §6.6 owns only their byte layout and the index-based tree order.
+
+**experiment binding (DECIDED): the reward leaf does NOT bind `experiment_id`.** This follows the
+§7.5 assignment-leaf precedent, for the same reason and with the same safety argument. The
+`reward_root` is committed in the per-experiment `Distribution` PDA (`[b"distribution", experiment]`),
+`claim_reward` verifies the leaf's Merkle proof against *that* experiment's finalized root, and the
+`ClaimReceipt` nullifier is per-experiment. Cross-experiment replay is therefore structurally
+impossible: to draw experiment Y's vault, `verify_proof(reward_leaf_hash(R,A,i), proof, Y.reward_root)`
+must hold, which requires leaf `(R,A,i)` to be a member of Y's committed tree. If it is **not** in Y's
+tree, no proof exists and the claim fails; if it **is** in Y's tree, then `R` is genuinely owed `A`
+under Y and claiming is legitimate (single-use per Y via the nullifier). No proof valid under
+experiment X ever yields funds from experiment Y for a leaf absent from Y's tree — so the same
+`(recipient, amount, leaf_index)` triple appearing in two experiments' trees is two independent
+entitlements, not a replay. Binding `experiment_id` into the leaf would add 32 bytes to every
+preimage and every on-chain claim to buy a property already guaranteed by the Distribution-account
+binding plus the proof-against-root check, so it is deliberately omitted (exactly as §7.5 omits it
+from the assignment leaf).
+
+**Endianness note (do not "harmonize").** The leaf preimage encodes `amount_base_units` and
+`leaf_index` **big-endian** (hashed-artifact determinism, above). The `ClaimReceipt` nullifier PDA
+seed encodes `leaf_index` **little-endian** (`leaf_index.to_le_bytes()`, the Solana/Anchor idiom for
+address derivation — a PDA seed is not a hashed protocol artifact). These two encodings of the same
+`leaf_index` are intentionally different and independent; neither may be changed to match the other.
 
 ## 7. Seed commitment & assignment derivation
 
