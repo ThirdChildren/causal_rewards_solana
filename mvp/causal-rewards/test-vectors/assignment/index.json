@@ -17,6 +17,54 @@
       "assignment_root_hex": "c463b3f14f812250b67cfbf3f1f33a5804434759d89c0d7469234a5c9e3b9f56",
       "seed_commitment_hex": "59852177fe866b8ae83912b8bcebf804279d51308cadd69275aed091abe2d0b3",
       "exercises": "bernoulli design, treat_fraction 0.25, 6 cohorts, different seed (control-heavy expected)"
+    },
+    {
+      "name": "assign-04-bernoulli-p0-allcontrol",
+      "assignment_root_hex": "a29905f9dddc5e9c91b2b584db2a96648267d6cf97d192229fc3fdb2cb2bbd22",
+      "seed_commitment_hex": "f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c",
+      "exercises": "bernoulli boundary treat_fraction_ppm=0 -> EVERY cohort control (no positive payout possible); 4 cohorts"
+    },
+    {
+      "name": "assign-05-bernoulli-p1000000-alltreat",
+      "assignment_root_hex": "47a46268259f8a376d049b917b335bb33578bace706bcaebb6c38f734e9cf622",
+      "seed_commitment_hex": "f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c",
+      "exercises": "bernoulli boundary treat_fraction_ppm=1000000 -> EVERY cohort treatment; 4 cohorts"
+    },
+    {
+      "name": "assign-06-fixed-count-0of5-allcontrol",
+      "assignment_root_hex": "75903cbf79dad2d1197a1cb64c182b6f47daf6b211ede166f9400f68b39f52ca",
+      "seed_commitment_hex": "e2f5ee3ae684b7fef4639a71a9f3318c792a8c2f21b8df349ffcb6d035fb884c",
+      "exercises": "fixed_count boundary treatment_count=0 -> EVERY cohort control; 5 cohorts"
+    },
+    {
+      "name": "assign-07-fixed-count-5of5-alltreat",
+      "assignment_root_hex": "d5cd1d842346ed8618ebb7a14a3eb04c807d63d499c489c6caa0ced483357608",
+      "seed_commitment_hex": "e2f5ee3ae684b7fef4639a71a9f3318c792a8c2f21b8df349ffcb6d035fb884c",
+      "exercises": "fixed_count boundary treatment_count=n -> EVERY cohort treatment; 5 cohorts"
+    },
+    {
+      "name": "assign-08-bernoulli-single-cohort",
+      "assignment_root_hex": "c6d557ccc992f84eac43f393580c052871d0680fb8b07a0555808b89068ae3df",
+      "seed_commitment_hex": "f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c",
+      "exercises": "single-leaf tree: assignment_root == leaf_hash(sole leaf), no interior node; n=1 (Merkle base case)"
+    },
+    {
+      "name": "assign-09-fixed-count-lexical-order",
+      "assignment_root_hex": "e95324dd3ccab2d2cbe02a8f9931f43037f991747c9c4d262f8b3db53e63dda4",
+      "seed_commitment_hex": "fe5378c65dd3b89cecb319178488f9c71549ac354fe4ec516f9fc1cc6c190d07",
+      "exercises": "cohort_id ordering is UTF-16 code-unit LEXICAL, not numeric: 'cohort-10' sorts BEFORE 'cohort-2'. Inputs supplied SCRAMBLED to prove the derivation reorders deterministically. fixed_count 3 of 6. This is the cross-language ordering footgun (naive numeric sort diverges here)."
+    },
+    {
+      "name": "assign-10-bernoulli-16cohorts",
+      "assignment_root_hex": "a5cb42e9cf2ca19bb2931949a4f816f9d7014abba1f332a24739913b78e42991",
+      "seed_commitment_hex": "fef57361ff3183772229883b047fec1db561b695cb8375b8464a4ec15a465a2a",
+      "exercises": "16 cohorts, balanced power-of-2 tree (4 levels, no promotion); bernoulli 0.5; zero-padded ids so lexical order == numeric order"
+    },
+    {
+      "name": "assign-11-fixed-count-3of7",
+      "assignment_root_hex": "5ba5cad7ccdb3c614cbb7523ee05055761833073bfdbf2e1cff9b81ddcb3c36c",
+      "seed_commitment_hex": "1acb0a5540caacfce6de10367bb8f4efd37051f8bc6dcd6ee08316f5e8196512",
+      "exercises": "7 cohorts (odd) exercises odd-node PROMOTION at multiple levels; fixed_count exactly 3 treated"
     }
   ]
 }

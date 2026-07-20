@@ -37,10 +37,18 @@ M1 — Spec & benchmark (wk 1-4) .............................. DONE (accepted)
     - Simulator: `make determinism` + 2 fresh-process runs -> identical content hash;
       41 tests pass.
 
-M2 — Programs & SDK (wk 5-9) ................................ NOT STARTED (authorized, gated on freeze tag)
+M2 — Programs & SDK (wk 5-9) ................................ IN PROGRESS
   Acceptance test: devnet deploy + local integration tests (happy + adversarial)
   + deterministic assignment vectors agreeing across on-chain program, TS SDK, and
   verifier reference. Every program/claim-logic change routed through security-reviewer.
+  Oracle in place: test-vectors/assignment/ (11 cross-impl vectors) + test-vectors/
+  adversarial/ (6 must-reject fixtures: invalid-seed-reveal, dup epoch, replayed batch,
+  stale evaluation, container-digest mismatch, double claim). `verify_vectors.py` exit 0.
+  In progress: solana-program-engineer (4 programs). Held: sdk-engineer (awaits IDL).
+  ERRATUM applied post-freeze: state-machine.md §2 tx4 seed commitment corrected from
+  stale salted prose to the ratified salt-free form (serialization.md §7.2). Prose only,
+  zero hash change, manifest golden still 74e0bb82... Tag spec-v1-frozen stays at its
+  commit; this erratum is a later main commit.
 
 M3 — Evidence & causal engine (wk 10-14) ................... NOT STARTED
   Acceptance test: independent reproduction of result-artifact hash + reward roots

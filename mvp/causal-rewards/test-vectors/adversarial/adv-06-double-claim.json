@@ -1,0 +1,31 @@
+{
+  "name": "adv-06-double-claim",
+  "category": "double-claim",
+  "invariant": "single-use claims (settlement); ClaimReceipt is a write-once nullifier",
+  "spec_refs": [
+    "state-machine.md §2 transition 10 (claim_reward: no existing ClaimReceipt for that leaf / nullifier unused)",
+    "state-machine.md §3 (ClaimReceipt is a write-once nullifier)"
+  ],
+  "guard": "claim_reward guard: there MUST be no existing ClaimReceipt for the reward leaf (its nullifier must be unused).",
+  "expected_result": "reject",
+  "rejection_code": "NULLIFIER_ALREADY_USED",
+  "why_rejected": "The second claim re-uses the same reward-leaf nullifier already recorded by the first ClaimReceipt. Accepting it would pay the same leaf twice (double spend of the reward budget).",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "reward_root_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "first_claim": {
+      "nullifier_hex": "4bf2ebfeb4adc254a52fa74d9803b741ffbebd532690c4398b796b05ec7e73bf",
+      "amount_base_units": "1000"
+    },
+    "second_claim": {
+      "nullifier_hex": "4bf2ebfeb4adc254a52fa74d9803b741ffbebd532690c4398b796b05ec7e73bf",
+      "amount_base_units": "1000"
+    }
+  },
+  "expected": {
+    "nullifiers_equal": true
+  },
+  "check": {
+    "kind": "double_claim_nullifier_reuse"
+  }
+}

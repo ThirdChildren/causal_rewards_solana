@@ -1,0 +1,160 @@
+{
+  "name": "assign-11-fixed-count-3of7",
+  "spec_section": "canonical-serialization.md (Merkle + assignment derivation)",
+  "exercises": "7 cohorts (odd) exercises odd-node PROMOTION at multiple levels; fixed_count exactly 3 treated",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "seed_hex": "123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+    "cohort_ids": [
+      "g-0",
+      "g-1",
+      "g-2",
+      "g-3",
+      "g-4",
+      "g-5",
+      "g-6"
+    ],
+    "design": "fixed_count",
+    "params": {
+      "treatment_count": "3"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); this is what the frozen manifest commits to, BEFORE the seed is revealed",
+    "seed_commitment_hex": "1acb0a5540caacfce6de10367bb8f4efd37051f8bc6dcd6ee08316f5e8196512"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64 = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian)",
+    "values": [
+      {
+        "cohort_id": "g-0",
+        "prf_u64": "4938132907953359233"
+      },
+      {
+        "cohort_id": "g-1",
+        "prf_u64": "2538496678197534554"
+      },
+      {
+        "cohort_id": "g-2",
+        "prf_u64": "5697770931906597080"
+      },
+      {
+        "cohort_id": "g-3",
+        "prf_u64": "8857820759050639892"
+      },
+      {
+        "cohort_id": "g-4",
+        "prf_u64": "17286770625904579261"
+      },
+      {
+        "cohort_id": "g-5",
+        "prf_u64": "11632800391155799807"
+      },
+      {
+        "cohort_id": "g-6",
+        "prf_u64": "16847325363717954507"
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "3",
+    "control_count": "4"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "g-0",
+        "arm": "treatment",
+        "prf_u64": "4938132907953359233",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "g-0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"g-0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22672d30227d",
+        "leaf_hash_hex": "324baa93a9426be5a5c98c055d299f98c83a553ee3ef65b9e3b8930c6678dda7"
+      },
+      {
+        "cohort_id": "g-1",
+        "arm": "treatment",
+        "prf_u64": "2538496678197534554",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "g-1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"g-1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22672d31227d",
+        "leaf_hash_hex": "9e0a410a74ac60603a40476825888025666b8a43ea24c3184673929c361bf785"
+      },
+      {
+        "cohort_id": "g-2",
+        "arm": "treatment",
+        "prf_u64": "5697770931906597080",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "g-2"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"g-2\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22672d32227d",
+        "leaf_hash_hex": "b853bbc65e2bee9148af302d61ac65d1482b2f9287076141b457817e0e9962f7"
+      },
+      {
+        "cohort_id": "g-3",
+        "arm": "control",
+        "prf_u64": "8857820759050639892",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "g-3"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"g-3\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22672d33227d",
+        "leaf_hash_hex": "316e396723bcc38bd171c0d196d02db13263746a61ae80b593bdaa92fa6ca963"
+      },
+      {
+        "cohort_id": "g-4",
+        "arm": "control",
+        "prf_u64": "17286770625904579261",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "g-4"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"g-4\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22672d34227d",
+        "leaf_hash_hex": "4ae1f78e481638fd5fcb9b410a1bb88a63e9dbaf55edd136658ebdce71b4ed0f"
+      },
+      {
+        "cohort_id": "g-5",
+        "arm": "control",
+        "prf_u64": "11632800391155799807",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "g-5"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"g-5\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22672d35227d",
+        "leaf_hash_hex": "da449242e18f213a01ac97466c3550575930ce058ce950dbe4cbb2fac530ba66"
+      },
+      {
+        "cohort_id": "g-6",
+        "arm": "control",
+        "prf_u64": "16847325363717954507",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "g-6"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"g-6\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22672d36227d",
+        "leaf_hash_hex": "b05f5d587b77031e1617a1da8755f70d4419c6ccc41cbce6b81526ef36d57c6a"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "5ba5cad7ccdb3c614cbb7523ee05055761833073bfdbf2e1cff9b81ddcb3c36c"
+  }
+}

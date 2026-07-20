@@ -1,1 +1,2 @@
 - [Resolved: base58 signer decode length](resolved-base58-signer-decode-length.md) — §6.5 signer leaf sort key pins base58 alphabet + decoded len==32 (hard error); prose-only, no hash change
+- [Resolved: seed commitment no salt](resolved-seed-commitment-no-salt.md) — state-machine.md tx4 reconciled to salt-free SHA-256("CRP-seed-commit-v1"‖seed) per serialization.md §7.2; prose-only, no hash change

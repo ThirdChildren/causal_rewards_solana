@@ -1,0 +1,58 @@
+{
+  "name": "assign-08-bernoulli-single-cohort",
+  "spec_section": "canonical-serialization.md (Merkle + assignment derivation)",
+  "exercises": "single-leaf tree: assignment_root == leaf_hash(sole leaf), no interior node; n=1 (Merkle base case)",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "seed_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "cohort_ids": [
+      "cohort-solo"
+    ],
+    "design": "bernoulli",
+    "params": {
+      "treat_fraction_ppm": "500000"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); this is what the frozen manifest commits to, BEFORE the seed is revealed",
+    "seed_commitment_hex": "f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64 = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian)",
+    "values": [
+      {
+        "cohort_id": "cohort-solo",
+        "prf_u64": "11736996287385231401"
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "1",
+    "control_count": "0"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "cohort-solo",
+        "arm": "treatment",
+        "prf_u64": "11736996287385231401",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-solo"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-solo\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d736f6c6f227d",
+        "leaf_hash_hex": "c6d557ccc992f84eac43f393580c052871d0680fb8b07a0555808b89068ae3df"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "c6d557ccc992f84eac43f393580c052871d0680fb8b07a0555808b89068ae3df"
+  }
+}

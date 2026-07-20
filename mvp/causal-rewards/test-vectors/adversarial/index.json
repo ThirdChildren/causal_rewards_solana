@@ -1,0 +1,46 @@
+{
+  "fixtures": [
+    {
+      "name": "adv-01-invalid-seed-reveal",
+      "category": "invalid-seed-reveal",
+      "expected_result": "reject",
+      "rejection_code": "SEED_COMMITMENT_MISMATCH",
+      "invariant": "1 (freeze-before-reveal)"
+    },
+    {
+      "name": "adv-02-duplicate-evidence-epoch",
+      "category": "duplicate-evidence-epoch",
+      "expected_result": "reject",
+      "rejection_code": "EPOCH_INDEX_NOT_MONOTONIC",
+      "invariant": "2 (determinism / no unordered replay); append-only evidence epochs"
+    },
+    {
+      "name": "adv-03-replayed-evidence-batch",
+      "category": "duplicate-evidence-epoch",
+      "expected_result": "reject",
+      "rejection_code": "DUPLICATE_EVIDENCE_LEAF",
+      "invariant": "2 (determinism); §6.5 evidence-tree totality (duplicate batch = hard error)"
+    },
+    {
+      "name": "adv-04-stale-evaluation",
+      "category": "stale-evaluation",
+      "expected_result": "reject",
+      "rejection_code": "STALE_EVALUATION_STATE_MISMATCH",
+      "invariant": "2 (reproducibility); evaluation binds the CURRENT committed state"
+    },
+    {
+      "name": "adv-05-evaluation-container-mismatch",
+      "category": "stale-evaluation",
+      "expected_result": "reject",
+      "rejection_code": "CONTAINER_DIGEST_MISMATCH",
+      "invariant": "2 (reproducibility via pinned container); 6 (process verified, not truth)"
+    },
+    {
+      "name": "adv-06-double-claim",
+      "category": "double-claim",
+      "expected_result": "reject",
+      "rejection_code": "NULLIFIER_ALREADY_USED",
+      "invariant": "single-use claims (settlement); ClaimReceipt is a write-once nullifier"
+    }
+  ]
+}

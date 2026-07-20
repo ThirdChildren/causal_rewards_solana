@@ -1,0 +1,143 @@
+{
+  "name": "assign-09-fixed-count-lexical-order",
+  "spec_section": "canonical-serialization.md (Merkle + assignment derivation)",
+  "exercises": "cohort_id ordering is UTF-16 code-unit LEXICAL, not numeric: 'cohort-10' sorts BEFORE 'cohort-2'. Inputs supplied SCRAMBLED to prove the derivation reorders deterministically. fixed_count 3 of 6. This is the cross-language ordering footgun (naive numeric sort diverges here).",
+  "inputs": {
+    "experiment_id": "exp-2026-switchback-007",
+    "seed_hex": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+    "cohort_ids": [
+      "cohort-2",
+      "cohort-10",
+      "cohort-1",
+      "cohort-20",
+      "cohort-3",
+      "cohort-11"
+    ],
+    "design": "fixed_count",
+    "params": {
+      "treatment_count": "3"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); this is what the frozen manifest commits to, BEFORE the seed is revealed",
+    "seed_commitment_hex": "fe5378c65dd3b89cecb319178488f9c71549ac354fe4ec516f9fc1cc6c190d07"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64 = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian)",
+    "values": [
+      {
+        "cohort_id": "cohort-2",
+        "prf_u64": "7294574147022288293"
+      },
+      {
+        "cohort_id": "cohort-10",
+        "prf_u64": "9481391627226340190"
+      },
+      {
+        "cohort_id": "cohort-1",
+        "prf_u64": "17877409348153432147"
+      },
+      {
+        "cohort_id": "cohort-20",
+        "prf_u64": "1828535768295381241"
+      },
+      {
+        "cohort_id": "cohort-3",
+        "prf_u64": "3421731693834841991"
+      },
+      {
+        "cohort_id": "cohort-11",
+        "prf_u64": "5683216057580479440"
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "3",
+    "control_count": "3"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "cohort-1",
+        "arm": "control",
+        "prf_u64": "17877409348153432147",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d31227d",
+        "leaf_hash_hex": "e1d1be126401f1886c01599bccf30a8b59a82ff69f710cfe57ab19104930626e"
+      },
+      {
+        "cohort_id": "cohort-10",
+        "arm": "control",
+        "prf_u64": "9481391627226340190",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-10"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-10\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3130227d",
+        "leaf_hash_hex": "f34a9339a5082dcf467973c55c7df3e74b74511206dc7683c5772303e4e3c86e"
+      },
+      {
+        "cohort_id": "cohort-11",
+        "arm": "treatment",
+        "prf_u64": "5683216057580479440",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-11"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-11\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3131227d",
+        "leaf_hash_hex": "6ec0b52bf1f4c91c1e828e34beb0ed2b8c1f63a813057903d34a20c35dfae1ce"
+      },
+      {
+        "cohort_id": "cohort-2",
+        "arm": "control",
+        "prf_u64": "7294574147022288293",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-2"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-2\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d32227d",
+        "leaf_hash_hex": "fd5043ab5b478b728370702cadea5c201f0a62351b46d132ac3eb9e37f6c65a4"
+      },
+      {
+        "cohort_id": "cohort-20",
+        "arm": "treatment",
+        "prf_u64": "1828535768295381241",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-20"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-20\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3230227d",
+        "leaf_hash_hex": "bacc956a74f671effce2365000b78da9d6a629dbecf3cdfc6afb2750d63562ff"
+      },
+      {
+        "cohort_id": "cohort-3",
+        "arm": "treatment",
+        "prf_u64": "3421731693834841991",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-3"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-3\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d33227d",
+        "leaf_hash_hex": "fde029b1cdfa100a4af14c4fb9e41fdaab5b43e6704b06828e00f17e521a16ee"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "e95324dd3ccab2d2cbe02a8f9931f43037f991747c9c4d262f8b3db53e63dda4"
+  }
+}

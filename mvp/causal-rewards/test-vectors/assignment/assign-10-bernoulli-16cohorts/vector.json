@@ -1,0 +1,313 @@
+{
+  "name": "assign-10-bernoulli-16cohorts",
+  "spec_section": "canonical-serialization.md (Merkle + assignment derivation)",
+  "exercises": "16 cohorts, balanced power-of-2 tree (4 levels, no promotion); bernoulli 0.5; zero-padded ids so lexical order == numeric order",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "seed_hex": "0000000000000000000000000000000000000000000000000000000000000001",
+    "cohort_ids": [
+      "cohort-00",
+      "cohort-01",
+      "cohort-02",
+      "cohort-03",
+      "cohort-04",
+      "cohort-05",
+      "cohort-06",
+      "cohort-07",
+      "cohort-08",
+      "cohort-09",
+      "cohort-10",
+      "cohort-11",
+      "cohort-12",
+      "cohort-13",
+      "cohort-14",
+      "cohort-15"
+    ],
+    "design": "bernoulli",
+    "params": {
+      "treat_fraction_ppm": "500000"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); this is what the frozen manifest commits to, BEFORE the seed is revealed",
+    "seed_commitment_hex": "fef57361ff3183772229883b047fec1db561b695cb8375b8464a4ec15a465a2a"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64 = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian)",
+    "values": [
+      {
+        "cohort_id": "cohort-00",
+        "prf_u64": "5196562903497399143"
+      },
+      {
+        "cohort_id": "cohort-01",
+        "prf_u64": "5853361478991598355"
+      },
+      {
+        "cohort_id": "cohort-02",
+        "prf_u64": "12007219257647062641"
+      },
+      {
+        "cohort_id": "cohort-03",
+        "prf_u64": "14206343354878096195"
+      },
+      {
+        "cohort_id": "cohort-04",
+        "prf_u64": "16801816140715183828"
+      },
+      {
+        "cohort_id": "cohort-05",
+        "prf_u64": "15285922074543911885"
+      },
+      {
+        "cohort_id": "cohort-06",
+        "prf_u64": "15909587508934526331"
+      },
+      {
+        "cohort_id": "cohort-07",
+        "prf_u64": "982163891841753165"
+      },
+      {
+        "cohort_id": "cohort-08",
+        "prf_u64": "10269514427382554468"
+      },
+      {
+        "cohort_id": "cohort-09",
+        "prf_u64": "6895524277275608178"
+      },
+      {
+        "cohort_id": "cohort-10",
+        "prf_u64": "5583774470510208271"
+      },
+      {
+        "cohort_id": "cohort-11",
+        "prf_u64": "5084888600398950320"
+      },
+      {
+        "cohort_id": "cohort-12",
+        "prf_u64": "3192805128746518406"
+      },
+      {
+        "cohort_id": "cohort-13",
+        "prf_u64": "687259083823910808"
+      },
+      {
+        "cohort_id": "cohort-14",
+        "prf_u64": "5104270848583503839"
+      },
+      {
+        "cohort_id": "cohort-15",
+        "prf_u64": "16446957217219077627"
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "6",
+    "control_count": "10"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "cohort-00",
+        "arm": "treatment",
+        "prf_u64": "5196562903497399143",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-00"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-00\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3030227d",
+        "leaf_hash_hex": "d45e842e5d9b3dcedb7a2903ceabeb7d617cb9dbc0f1662031c5f5a782132b5c"
+      },
+      {
+        "cohort_id": "cohort-01",
+        "arm": "control",
+        "prf_u64": "5853361478991598355",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-01"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-01\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3031227d",
+        "leaf_hash_hex": "b22306be4e4d8c5e06693f50d576283684be4b25304915a348fc97b2053d19f3"
+      },
+      {
+        "cohort_id": "cohort-02",
+        "arm": "treatment",
+        "prf_u64": "12007219257647062641",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-02"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-02\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3032227d",
+        "leaf_hash_hex": "a2e5b0e865495e74662ea76ce88a7f74f945d8bef1263be05a7a12588298d181"
+      },
+      {
+        "cohort_id": "cohort-03",
+        "arm": "treatment",
+        "prf_u64": "14206343354878096195",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-03"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-03\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3033227d",
+        "leaf_hash_hex": "3b39116638bd49b15b8fa54b7de9808b9ffeda839d70602e9920a19bd8e690b4"
+      },
+      {
+        "cohort_id": "cohort-04",
+        "arm": "treatment",
+        "prf_u64": "16801816140715183828",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-04"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-04\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3034227d",
+        "leaf_hash_hex": "059f1d31a682cbd992fbfbd03b0cf1023adaf6deb9ae63ecc7953e42e51d3f7f"
+      },
+      {
+        "cohort_id": "cohort-05",
+        "arm": "control",
+        "prf_u64": "15285922074543911885",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-05"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-05\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3035227d",
+        "leaf_hash_hex": "39ded23bebfa97debd7a9562965282914ed8d0f951d3177bcb17b54730282f8a"
+      },
+      {
+        "cohort_id": "cohort-06",
+        "arm": "control",
+        "prf_u64": "15909587508934526331",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-06"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-06\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3036227d",
+        "leaf_hash_hex": "94650a6db54826ed7a7244bab0a1a8ec022880753df28a2e461de45333341789"
+      },
+      {
+        "cohort_id": "cohort-07",
+        "arm": "control",
+        "prf_u64": "982163891841753165",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-07"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-07\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3037227d",
+        "leaf_hash_hex": "f204377ab3b5f5d9cc25e03ca3e5fd95fae1f66d31744ac01573738924c1b3d2"
+      },
+      {
+        "cohort_id": "cohort-08",
+        "arm": "control",
+        "prf_u64": "10269514427382554468",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-08"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-08\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3038227d",
+        "leaf_hash_hex": "193323bbced9069940f7f3507617fd24f9cecaea0f7883ca69e40455035d2e58"
+      },
+      {
+        "cohort_id": "cohort-09",
+        "arm": "control",
+        "prf_u64": "6895524277275608178",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-09"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-09\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3039227d",
+        "leaf_hash_hex": "1552f6f316eaf11eb65d29726b9173c67bc8aca2849be68b1f2d06d58390e313"
+      },
+      {
+        "cohort_id": "cohort-10",
+        "arm": "treatment",
+        "prf_u64": "5583774470510208271",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-10"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-10\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3130227d",
+        "leaf_hash_hex": "5304b6bbbf57f63041a9b34d848dd57565919ed47425cc1e3d619630cb6b5485"
+      },
+      {
+        "cohort_id": "cohort-11",
+        "arm": "control",
+        "prf_u64": "5084888600398950320",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-11"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-11\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3131227d",
+        "leaf_hash_hex": "313ffb92d6fab733a35f6554f318f3eab96e9f1b411cb64f14f5c0feeaa052bd"
+      },
+      {
+        "cohort_id": "cohort-12",
+        "arm": "control",
+        "prf_u64": "3192805128746518406",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-12"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-12\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3132227d",
+        "leaf_hash_hex": "55d424189dbd5551658457047e3a096fac4a35b706364e5ff32803cf16757909"
+      },
+      {
+        "cohort_id": "cohort-13",
+        "arm": "control",
+        "prf_u64": "687259083823910808",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-13"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-13\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3133227d",
+        "leaf_hash_hex": "20f262cb98a3b5645e954da32eadef2634390de3fd4d666f1015a0312a9a11f0"
+      },
+      {
+        "cohort_id": "cohort-14",
+        "arm": "control",
+        "prf_u64": "5104270848583503839",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-14"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-14\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d3134227d",
+        "leaf_hash_hex": "ebe8bf74d391fde95b5d6441cba90c84dbe3713971e239d8c46ae9abf77d20b5"
+      },
+      {
+        "cohort_id": "cohort-15",
+        "arm": "treatment",
+        "prf_u64": "16446957217219077627",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "cohort-15"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"cohort-15\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22636f686f72742d3135227d",
+        "leaf_hash_hex": "c8fed72af708f69b2511b47bfe9be36e02fddc014eb5595a2812cd9febd9907f"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "a5cb42e9cf2ca19bb2931949a4f816f9d7014abba1f332a24739913b78e42991"
+  }
+}

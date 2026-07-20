@@ -1,0 +1,25 @@
+{
+  "name": "adv-02-duplicate-evidence-epoch",
+  "category": "duplicate-evidence-epoch",
+  "invariant": "2 (determinism / no unordered replay); append-only evidence epochs",
+  "spec_refs": [
+    "state-machine.md §2 transition 5 (post_evidence_epoch)",
+    "state-machine.md §3 (EvidenceEpoch is write-once / append-only)"
+  ],
+  "guard": "post_evidence_epoch guard: epoch_index MUST equal previous_epoch_index + 1.",
+  "expected_result": "reject",
+  "rejection_code": "EPOCH_INDEX_NOT_MONOTONIC",
+  "why_rejected": "A second epoch re-uses an already-anchored epoch_index (replay) instead of extending the chain by exactly one. Anchoring it would duplicate or overwrite a committed epoch and let the same evidence be counted twice.",
+  "inputs": {
+    "experiment_id": "env-sensors-pilot-001",
+    "previous_epoch_index": "3",
+    "attempted_epoch_index": "3"
+  },
+  "expected": {
+    "required_next_epoch_index": "4",
+    "attempted_equals_required": false
+  },
+  "check": {
+    "kind": "epoch_index_not_monotonic"
+  }
+}

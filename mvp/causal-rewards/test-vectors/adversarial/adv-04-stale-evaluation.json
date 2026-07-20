@@ -1,0 +1,24 @@
+{
+  "name": "adv-04-stale-evaluation",
+  "category": "stale-evaluation",
+  "invariant": "2 (reproducibility); evaluation binds the CURRENT committed state",
+  "spec_refs": [
+    "state-machine.md §2 transition 6 (submit_evaluation)",
+    "state-machine.md §2 transition 8 (resolve_challenge: an upheld challenge invalidates the Evaluation, so a re-submission must bind current state)"
+  ],
+  "guard": "An Evaluation must be computed against the CURRENTLY committed cohort_root / epoch set. One referencing a superseded root (e.g. the pre-re-derivation root after an upheld challenge) is stale and must be rejected.",
+  "expected_result": "reject",
+  "rejection_code": "STALE_EVALUATION_STATE_MISMATCH",
+  "why_rejected": "The evaluation's referenced cohort_root does not match the cohort_root committed on-chain for this experiment. Accepting it would settle rewards against a superseded assignment, breaking reproducibility.",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "committed_cohort_root_hex": "c229b5ccfdf447900526a45afac31a009c6348685b135edfe2eb6139ef1b914d",
+    "evaluation_referenced_cohort_root_hex": "c463b3f14f812250b67cfbf3f1f33a5804434759d89c0d7469234a5c9e3b9f56"
+  },
+  "expected": {
+    "referenced_matches_committed": false
+  },
+  "check": {
+    "kind": "stale_evaluation_state_mismatch"
+  }
+}

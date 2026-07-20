@@ -1,0 +1,109 @@
+{
+  "name": "assign-04-bernoulli-p0-allcontrol",
+  "spec_section": "canonical-serialization.md (Merkle + assignment derivation)",
+  "exercises": "bernoulli boundary treat_fraction_ppm=0 -> EVERY cohort control (no positive payout possible); 4 cohorts",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "seed_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "cohort_ids": [
+      "cohort-0001",
+      "cohort-0002",
+      "cohort-0003",
+      "cohort-0004"
+    ],
+    "design": "bernoulli",
+    "params": {
+      "treat_fraction_ppm": "0"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); this is what the frozen manifest commits to, BEFORE the seed is revealed",
+    "seed_commitment_hex": "f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64 = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian)",
+    "values": [
+      {
+        "cohort_id": "cohort-0001",
+        "prf_u64": "14788940746090825191"
+      },
+      {
+        "cohort_id": "cohort-0002",
+        "prf_u64": "12343490827959146294"
+      },
+      {
+        "cohort_id": "cohort-0003",
+        "prf_u64": "1871103800098526807"
+      },
+      {
+        "cohort_id": "cohort-0004",
+        "prf_u64": "17787029940895739101"
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "0",
+    "control_count": "4"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "cohort-0001",
+        "arm": "control",
+        "prf_u64": "14788940746090825191",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-0001"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-0001\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d30303031227d",
+        "leaf_hash_hex": "51e3196d9f8ea5c6a41d5c9c67d38b1cfc3ee814496a65e9bf9b866de3ba5667"
+      },
+      {
+        "cohort_id": "cohort-0002",
+        "arm": "control",
+        "prf_u64": "12343490827959146294",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-0002"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-0002\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d30303032227d",
+        "leaf_hash_hex": "2c2c07721d74c21188a40c33401bedd29c3eccb50c0584ad44ae6b665b18de93"
+      },
+      {
+        "cohort_id": "cohort-0003",
+        "arm": "control",
+        "prf_u64": "1871103800098526807",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-0003"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-0003\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d30303033227d",
+        "leaf_hash_hex": "6ec2635dbcb150d6609751c4ba5478489a306a12df447c981509581a922a4755"
+      },
+      {
+        "cohort_id": "cohort-0004",
+        "arm": "control",
+        "prf_u64": "17787029940895739101",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "cohort-0004"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"cohort-0004\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22636f686f72742d30303034227d",
+        "leaf_hash_hex": "10033ede39ba9ad67ab8c3c0e12f7950c9696bb80dfe149c9d20b0f38a322295"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "a29905f9dddc5e9c91b2b584db2a96648267d6cf97d192229fc3fdb2cb2bbd22"
+  }
+}

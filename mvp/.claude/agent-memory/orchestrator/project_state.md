@@ -7,7 +7,21 @@ metadata:
 
 # Causal Rewards Protocol MVP — State
 
-**Current milestone:** M1 (Spec & benchmark, wk 1–4). Started 2026-07-17. ACCEPTANCE MET 2026-07-17 (all 4 freeze conditions verified by orchestrator). Awaiting user go-ahead to commit/tag the frozen spec and authorize M2.
+**Current milestone:** M2 (Programs & SDK, wk 5–9). Started 2026-07-20. M1 ACCEPTED + spec FROZEN.
+
+**Spec freeze:** git tag `spec-v1-frozen` (annotated, records ratified hashes) at commit 0954bf4eca51e956b642cd50eb2ea225fac98cae, pushed to origin/main. Tag = spec RELEASE discipline; spec changes after = versioned migrations (v1.1/v2), never silent. DISTINCT from freeze-before-reveal runtime invariant. Discrepancy #1 RESOLVED pre-tag (evidence schema conformant + §6.5 leaf sort keys + signer_pubkey len-32); signed off by architect+verifier+backend.
+
+**M2 acceptance gate:** devnet deploy + local integration tests (happy + adversarial) + deterministic assignment vectors agreeing across on-chain program / TS SDK / verifier reference. Every program + claim-logic change routed through security-reviewer before "done".
+
+**M2 component status:**
+- verifier assignment vectors + adversarial fixtures: DELIVERED 2026-07-20, ACCEPTED. 11 assignment vectors (roots unchanged for 01-03; added boundary p0/p1e6, count 0/n, n=1 base case, UTF-16 lexical trap assign-09, 16-cohort balanced, 7-cohort odd promotion) + 6 adversarial fixtures in test-vectors/adversarial/ (adv-01 invalid-seed-reveal SEED_COMMITMENT_MISMATCH, adv-02 EPOCH_INDEX_NOT_MONOTONIC, adv-03 DUPLICATE_EVIDENCE_LEAF, adv-04 STALE_EVALUATION_STATE_MISMATCH, adv-05 CONTAINER_DIGEST_MISMATCH, adv-06 NULLIFIER_ALREADY_USED). verify_vectors.py exit 0 (orchestrator ran). These define M2 gate: programs must reproduce roots + reject all 6 fixtures.
+- solana-program-engineer: RUNNING (4 programs). Given salt-free construction directly in prompt + serialization.md authority.
+- sdk-engineer: HELD until IDL published.
+- security-reviewer: on path after program/claim changes.
+
+**SPEC ERRATUM (in flight, architect ab7b47f):** state-machine.md §2 tx4 had STALE salted seed-commitment prose contradicting ratified serialization.md §7.2 (salt-free SHA-256("CRP-seed-commit-v1"||seed)). Doc erratum only — behavior unchanged. Architect fixing prose; MUST NOT touch manifest/hashed files (bumping manifest spec_version would break golden 74e0bb…). Tag spec-v1-frozen stays at 0954bf4; erratum is a later main commit, noted in handoff.
+
+**M1 (historical):** Started 2026-07-17. ACCEPTANCE MET 2026-07-20 (all 4 freeze conditions verified by orchestrator).
 
 **FINAL golden hashes (ratified, non-provisional):** manifest_golden_sha256 = 74e0bb825013fcd4a2327b234a5f44c48cd709e7a3025cd30a3b26ace68f81b2 (CJSON byte_len 3852); reward_curve_hash = sha256:14b0ec34d3653a5857ceef10b9bdfee264a6865172c2b2cfb1d2405fae856d41. Dead provisional hashes: 6d39…67ed / 838f…dfca. Orchestrator independently reproduced 74e0bb… via verifier-cli/reference/canonical.py.
 

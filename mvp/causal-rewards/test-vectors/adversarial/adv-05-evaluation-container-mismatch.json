@@ -1,0 +1,24 @@
+{
+  "name": "adv-05-evaluation-container-mismatch",
+  "category": "stale-evaluation",
+  "invariant": "2 (reproducibility via pinned container); 6 (process verified, not truth)",
+  "spec_refs": [
+    "state-machine.md §2 transition 6 (submit_evaluation: echoed analysis_container_digest MUST equal the frozen one)",
+    "state-machine.md §3 (analysis_container_digest is in the frozen immutability set)"
+  ],
+  "guard": "submit_evaluation guard: the echoed analysis_container_digest MUST equal the frozen analysis_container_digest.",
+  "expected_result": "reject",
+  "rejection_code": "CONTAINER_DIGEST_MISMATCH",
+  "why_rejected": "The evaluation was produced by a container whose digest differs from the one pinned at freeze. A different container can produce a different result artifact, so the result is not reproducible against the frozen plan.",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "frozen_analysis_container_digest": "sha256:abababababababababababababababababababababababababababababababab",
+    "echoed_analysis_container_digest": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+  },
+  "expected": {
+    "digests_equal": false
+  },
+  "check": {
+    "kind": "container_digest_mismatch"
+  }
+}

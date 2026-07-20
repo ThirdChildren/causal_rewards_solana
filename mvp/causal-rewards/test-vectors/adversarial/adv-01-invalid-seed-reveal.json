@@ -1,0 +1,25 @@
+{
+  "name": "adv-01-invalid-seed-reveal",
+  "category": "invalid-seed-reveal",
+  "invariant": "1 (freeze-before-reveal)",
+  "spec_refs": [
+    "serialization.md §7.2 (seed commitment = SHA-256(CRP-seed-commit-v1 || seed))",
+    "state-machine.md §2 transition 4 (reveal_seed)"
+  ],
+  "guard": "reveal_seed guard: SHA-256(CRP-seed-commit-v1 || revealed_seed) MUST equal the frozen seed_commitment; else revert.",
+  "expected_result": "reject",
+  "rejection_code": "SEED_COMMITMENT_MISMATCH",
+  "why_rejected": "The revealed seed does not open the commitment frozen in the manifest. Accepting it would let the coordinator choose a seed AFTER freeze to steer cohort assignment, breaking freeze-before-reveal.",
+  "inputs": {
+    "experiment_id": "exp-2026-envsensors-001",
+    "frozen_seed_commitment_hex": "f2261eaa83213f94c8002ebf49daee8045fd34caa803c3d53b1d0aeb0fe6cd9c",
+    "revealed_seed_hex": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "expected": {
+    "recomputed_commitment_of_revealed_seed_hex": "62cbe8c197fde16e92b7f87308b800f3cdbf6414ac96c694d74cb2437294c945",
+    "equals_frozen_commitment": false
+  },
+  "check": {
+    "kind": "seed_commitment_mismatch"
+  }
+}
