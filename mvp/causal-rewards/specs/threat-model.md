@@ -81,7 +81,8 @@ Goals: stall finality, harass the coordinator/evaluator, force repeated re-work.
 | --- | --- |
 | Open baseless challenges to pause finality. | C-BOND: each `open_challenge` escrows a bond ≥ `challenge_bond_base_units`, forfeited when the challenge is dismissed. Griefing has a per-attempt cost. |
 | Spam many challenges. | Each is a separate `Challenge` with its own bond; cost scales linearly with attempts. C-MULTI resolves them; only an *upheld* (verifier-backed) challenge invalidates the evaluation. |
-| Keep the experiment in `Challenged` forever. | Finalization is permitted once all challenges are resolved with none upheld, or the challenge window elapses (`finalize_distribution` guards). The window bounds indefinite stalling. |
+| Keep the experiment in `Challenged` forever. | Finalization requires **both** `now ≥ challenge_window_end` **and** `open_challenges == 0` (`finalize_distribution`, `state-machine.md` tx9). A challenger cannot stall past the window by leaving a challenge open indefinitely: `resolve_challenge` (multisig) drives `open_challenges` to 0, and if the whole flow is abandoned, `abort_experiment` (multisig or the permissionless timeout `evaluation_deadline + abort_grace_seconds`) unwinds it and refunds open bonds. Neither a stuck challenge nor a coordinator walk-away can trap funds pre-`Final`. |
+| Open a challenge, then let it be dismissed, to collapse the finalize window early for honest not-yet-opened challengers. | Fixed guard (finding M1): the removed `ever_challenged` short-circuit no longer exists. Finalize still requires `now ≥ challenge_window_end`, so a dismissed challenge (which only decrements `open_challenges`) cannot shorten the honest window. |
 | Frivolous challenge to extract a settlement. | Resolution is adjudicated against a verifier CLI re-run, not negotiation; a correct evaluation cannot be overturned, so there is nothing to extract. |
 
 ## 4. Residual risks (out of scope for on-chain enforcement)

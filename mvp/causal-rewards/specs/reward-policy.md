@@ -168,6 +168,33 @@ Both inequalities hold by floor division at each split. Payouts never exceed the
 unallocated funds are recovered at `close_experiment`. No redistribution mechanism can push total
 payout above `B`.
 
+## Advisory on-chain accounting (security finding M3)
+
+The `Distribution` account records `total_allocated_base_units` at `finalize_distribution`. This
+value is an **advisory upper bound only**: the on-chain program enforces `total_allocated_base_units
+≤ budget_base_units`, but it does **not** verify that `total_allocated_base_units` equals the sum of
+the amounts in the reward Merkle leaves. The chain cannot cheaply recompute `Σ_all leaf_i` — the
+leaves live off-chain and are committed only through `reward_root` (`serialization.md` §6.6). A
+coordinator could therefore finalize with a `total_allocated_base_units` that overstates (up to the
+budget cap) or understates the true leaf sum.
+
+This is deliberate and safe under the trust model (`threat-model.md`), because payout is bounded by
+two independent mechanisms that do **not** rely on `total_allocated_base_units`:
+
+- **Per-claim ceiling.** `claim_reward` pays only what a valid Merkle proof against the finalized
+  `reward_root` authorizes, once per leaf (single-use nullifier). No claim can pay more than its leaf
+  amount, and the budget vault itself caps the aggregate — an over-stated
+  `total_allocated_base_units` cannot mint funds.
+- **Verifier + challenge.** The verifier CLI recomputes every `leaf_i` and the `reward_root` from
+  the audit bundle and the frozen plan. A `reward_root` (or a `total_allocated_base_units` that
+  contradicts the recomputed leaves) that does not follow from the bundle is an upheld,
+  bond-backed challenge (`state-machine.md` tx7/tx8), which invalidates the evaluation.
+
+`total_allocated_base_units` is thus a convenience/UX figure and a coarse ≤-budget guardrail, never
+a cryptographic commitment. The cryptographic commitment to the payout set is `reward_root` alone;
+correctness of the split is enforced off-chain by reproduction, consistent with Invariant 6 (the
+chain verifies process, not truth).
+
 ## Worked example (matches `examples/manifest.example.json`)
 
 Manifest: `effect_scale = -6`, `critical_value_micro = 1_645_000` (1.645, one-sided ~95%),
