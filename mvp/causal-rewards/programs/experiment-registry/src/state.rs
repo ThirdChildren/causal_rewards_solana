@@ -32,11 +32,15 @@ pub struct ProtocolConfig {
     pub evidence_program: Pubkey,
     pub settlement_program: Pubkey,
     pub challenge_program: Pubkey,
+    /// Timeout offset (seconds) for the permissionless `abort_experiment` path
+    /// (state-machine v1.1 tx12): abort is permissionlessly reachable once
+    /// `now > evaluation_deadline + abort_grace_seconds`.
+    pub abort_grace_seconds: i64,
     pub bump: u8,
 }
 
 impl ProtocolConfig {
-    pub const SPACE: usize = 8 + 32 + 2 + 1 + 1 + 2 + 32 + 32 + 32 + 1;
+    pub const SPACE: usize = 8 + 32 + 2 + 1 + 1 + 2 + 32 + 32 + 32 + 8 + 1;
 }
 
 /// Per-experiment record. Holds only hashes / roots / status / windows (Invariant 5).
@@ -73,12 +77,23 @@ pub struct Experiment {
     pub revealed_seed: Option<[u8; 32]>,
 
     // ---- Phase bookkeeping (written only by registry, incl. CPI transitions) ----
-    pub evaluation_present: bool,
-    pub evaluation_invalidated: bool,
-    pub ever_challenged: bool,
+    /// True iff a live, non-invalidated `Evaluation` is present (set at
+    /// `submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).
+    /// It is the sole `evaluation is finalizable` predicate (state-machine v1.1);
+    /// starts `false` at create (no evaluation yet). Replaces the previous
+    /// `evaluation_present`/`evaluation_invalidated` pair and the removed
+    /// `ever_challenged` gate (security findings H2/M1).
+    pub evaluation_valid: bool,
+    /// `open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of
+    /// unresolved `Challenge` accounts; checked_add/sub only.
     pub open_challenges: u32,
+    /// Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window
+    /// is defined only here so no earlier event can shorten it (security finding M1).
     pub challenge_window_end: i64,
     pub claim_window_end: i64,
+    /// Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted
+    /// (pre-`Final` escape from the fund trap, security finding H1). No 8th status word.
+    pub aborted: bool,
 
     pub created_at: i64,
     pub bump: u8,
@@ -99,9 +114,10 @@ impl Experiment {
         + 8 * 6                               // windows
         + 1                                   // cohort_published
         + 1 + 32                              // revealed_seed Option
-        + 1 + 1 + 1                           // evaluation_present/invalidated/ever_challenged
+        + 1                                   // evaluation_valid
         + 4                                   // open_challenges
         + 8 + 8                               // challenge_window_end, claim_window_end
+        + 1                                   // aborted
         + 8                                   // created_at
         + 1 + 1; // bump, vault_bump
 }

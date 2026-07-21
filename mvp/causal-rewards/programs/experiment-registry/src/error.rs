@@ -34,9 +34,9 @@ pub enum RegistryError {
     CohortNotPublished,
     #[msg("Caller program is not the registered authority for this transition")]
     UnauthorizedCaller,
-    #[msg("Evaluation was invalidated by an upheld challenge; resubmit required")]
-    EvaluationInvalidated,
-    #[msg("Challenge window has not elapsed and challenges remain unresolved")]
+    #[msg("Evaluation is not valid (never submitted, or invalidated by an upheld challenge; resubmit required)")]
+    EvaluationNotValid,
+    #[msg("Challenge window has not elapsed")]
     ChallengeWindowNotElapsed,
     #[msg("Open challenges remain unresolved")]
     OpenChallengesRemain,
@@ -48,4 +48,8 @@ pub enum RegistryError {
     InvalidThreshold,
     #[msg("Vault mint does not match experiment mint")]
     MintMismatch,
+    #[msg("abort_experiment is only reachable from a pre-Final state (Frozen/Active/Evaluating/Challenged)")]
+    AbortNotAllowed,
+    #[msg("Experiment already aborted")]
+    AlreadyAborted,
 }

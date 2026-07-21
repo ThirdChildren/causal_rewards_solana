@@ -45,3 +45,15 @@ pub struct StatusTransitioned {
     pub to: u8,
     pub caller_program: Pubkey,
 }
+
+/// Emitted when `abort_experiment` (tx12) drives a pre-`Final` experiment to
+/// `Closed` with `aborted = true` (security finding H1).
+#[event]
+pub struct ExperimentAborted {
+    pub experiment: Pubkey,
+    /// Status the experiment was in immediately before abort.
+    pub from: u8,
+    /// Open challenges recorded at abort time (their bonds are refundable via the
+    /// challenge program's `refund_bond` crank).
+    pub open_challenges: u32,
+}

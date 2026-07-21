@@ -90,7 +90,13 @@ describe("causal-rewards protocol (M2)", () => {
     const cfgInfo = await conn.getAccountInfo(protocolConfig);
     if (!cfgInfo) {
       await registry.methods
-        .initProtocolConfig(1, h.EVIDENCE_ID, h.SETTLEMENT_ID, h.CHALLENGE_ID)
+        .initProtocolConfig(
+          1,
+          h.EVIDENCE_ID,
+          h.SETTLEMENT_ID,
+          h.CHALLENGE_ID,
+          new BN(ABORT_GRACE_SECONDS)
+        )
         .accounts({
           protocolConfig,
           admin: wallet.publicKey,
@@ -99,6 +105,9 @@ describe("causal-rewards protocol (M2)", () => {
         .rpc();
     }
   });
+
+  // Permissionless-abort timeout offset (ProtocolConfig.abort_grace_seconds).
+  const ABORT_GRACE_SECONDS = 2;
 
   // Unique per-run suffix so experiments are fresh on a persistent ledger.
   const RUN = Date.now().toString(36);
@@ -249,6 +258,124 @@ describe("causal-rewards protocol (M2)", () => {
       )
       .signers(signers)
       .rpc();
+  }
+
+  // Fund a fresh challenger with SOL (fees) + tokens (bond) and return its ATA.
+  async function fundChallenger(kp: Keypair, tokens = 5_000_000): Promise<PublicKey> {
+    await airdrop(kp.publicKey);
+    const ata = (
+      await getOrCreateAssociatedTokenAccount(conn, wallet.payer, mint, kp.publicKey)
+    ).address;
+    await mintTo(conn, wallet.payer, mint, ata, wallet.payer, tokens);
+    return ata;
+  }
+
+  async function openChallengeBy(
+    experiment: PublicKey,
+    kp: Keypair,
+    kpAta: PublicKey,
+    bond = 1_000_000
+  ) {
+    const ch = h.challengePda(experiment, kp.publicKey);
+    await challenge.methods
+      .openChallenge(1, new BN(bond))
+      .accounts({
+        protocolConfig,
+        experiment,
+        challenge: ch,
+        bondVault: h.bondVaultPda(ch),
+        mint,
+        challengerToken: kpAta,
+        cpiAuthority: h.challengeCpiAuthorityPda(),
+        challenger: kp.publicKey,
+        experimentRegistryProgram: h.REGISTRY_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      })
+      .signers([kp])
+      .rpc();
+    return ch;
+  }
+
+  async function resolveChallengeBy(
+    experiment: PublicKey,
+    kp: Keypair,
+    upheld: boolean,
+    bondDestination: PublicKey,
+    signers = [m1, m2]
+  ) {
+    const ch = h.challengePda(experiment, kp.publicKey);
+    await challenge.methods
+      .resolveChallenge(upheld)
+      .accounts({
+        protocolConfig,
+        experiment,
+        challenge: ch,
+        bondVault: h.bondVaultPda(ch),
+        bondDestination,
+        cpiAuthority: h.challengeCpiAuthorityPda(),
+        resolver: wallet.publicKey,
+        experimentRegistryProgram: h.REGISTRY_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .remainingAccounts(
+        signers.map((s) => ({ pubkey: s.publicKey, isSigner: true, isWritable: false }))
+      )
+      .signers(signers)
+      .rpc();
+  }
+
+  async function refundBondBy(experiment: PublicKey, kp: Keypair, kpAta: PublicKey) {
+    const ch = h.challengePda(experiment, kp.publicKey);
+    await challenge.methods
+      .refundBond()
+      .accounts({
+        protocolConfig,
+        experiment,
+        challenge: ch,
+        bondVault: h.bondVaultPda(ch),
+        bondDestination: kpAta,
+        cranker: wallet.publicKey,
+        experimentRegistryProgram: h.REGISTRY_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc();
+  }
+
+  // Abort via multisig (default) or permissionless (signers = []).
+  async function abortExperiment(experiment: PublicKey, signers: Keypair[] = [m1, m2]) {
+    await settlement.methods
+      .abortExperiment()
+      .accounts({
+        protocolConfig,
+        experiment,
+        distribution: h.distributionPda(experiment),
+        vault: h.vaultPda(experiment),
+        vaultAuthority: h.vaultAuthorityPda(experiment),
+        recoveryToken: coordinatorAta.address,
+        cpiAuthority: h.settlementCpiAuthorityPda(),
+        cranker: wallet.publicKey,
+        experimentRegistryProgram: h.REGISTRY_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .remainingAccounts(
+        signers.map((s) => ({ pubkey: s.publicKey, isSigner: true, isWritable: false }))
+      )
+      .signers(signers)
+      .rpc();
+  }
+
+  // Drive a fresh experiment all the way to Evaluating (with one epoch + evaluation).
+  async function toEvaluating(id: string, budget: number, win: any = windows()) {
+    const { experiment } = await createExperiment(id, budget, win);
+    await freeze(experiment);
+    await publish(experiment);
+    await reveal(experiment);
+    await postEpoch(experiment, 0, experiment);
+    const rr = h.merkleRootFromHashes([h.rewardLeafHash(p1.publicKey, 10n, 0n)]);
+    await submitEval(experiment, rr);
+    return experiment;
   }
 
   // ---- Shared state for the happy-path experiment "A" ----
@@ -547,9 +674,227 @@ describe("causal-rewards protocol (M2)", () => {
       .signers([m1, m2])
       .rpc();
 
-    // Now finalize succeeds (all challenges resolved, none upheld).
+    // Now finalize succeeds (all challenges resolved, none upheld, window elapsed).
+    await h.sleep(1200); // absolute challenge window must elapse (M1: no ever_challenged shortcut)
     await finalize(experiment, 10);
     acc = await registry.account.experiment.fetch(experiment);
     assert.deepEqual(Object.keys(acc.status)[0], "final");
+  });
+
+  // ============================================================================
+  // v1.1 settlement-flow hardening (security findings H1, H2, M1)
+  // ============================================================================
+
+  // (a) H2: two concurrent challenges; uphold one -> the OTHER stays independently
+  //     resolvable and its bond returns; finality reachable after both resolve.
+  it("H2: two concurrent challenges resolve order-independently; each bond releases; finality reachable", async () => {
+    const cw = 5;
+    const exp = await toEvaluating(
+      expId("h2a"),
+      500_000,
+      windows({ challengeWindowSeconds: new BN(cw) })
+    );
+
+    const cA = Keypair.generate();
+    const cB = Keypair.generate();
+    const aAta = await fundChallenger(cA);
+    const bAta = await fundChallenger(cB);
+
+    await openChallengeBy(exp, cA, aAta);
+    await openChallengeBy(exp, cB, bAta);
+    let acc: any = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "challenged");
+    assert.equal(acc.openChallenges, 2);
+
+    const aBefore = Number((await getAccount(conn, aAta)).amount);
+    const bBefore = Number((await getAccount(conn, bAta)).amount);
+
+    // Uphold cA: open_challenges 2 -> 1, STILL Challenged, evaluation invalidated, cA bond returned.
+    await resolveChallengeBy(exp, cA, true, aAta);
+    acc = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "challenged");
+    assert.equal(acc.openChallenges, 1);
+    assert.isFalse(acc.evaluationValid);
+    assert.equal(Number((await getAccount(conn, aAta)).amount) - aBefore, 1_000_000);
+
+    // The OTHER challenge is still independently resolvable regardless of order.
+    await resolveChallengeBy(exp, cB, true, bAta);
+    acc = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "evaluating"); // open_challenges -> 0
+    assert.equal(acc.openChallenges, 0);
+    assert.equal(Number((await getAccount(conn, bAta)).amount) - bBefore, 1_000_000);
+
+    // Evaluation is invalid -> finalize blocked until a corrected resubmission.
+    let failed = false;
+    try {
+      await finalize(exp, 10);
+    } catch (_) {
+      failed = true;
+    }
+    assert.isTrue(failed, "finalize must be blocked while evaluation invalid");
+
+    const rr = h.merkleRootFromHashes([h.rewardLeafHash(p1.publicKey, 10n, 0n)]);
+    await submitEval(exp, rr); // Evaluating self-loop: re-validates + fresh absolute window
+    await h.sleep((cw + 1) * 1000);
+    await finalize(exp, 10);
+    acc = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "final");
+  });
+
+  // (b) H2: uphold one while another is still pending, then resolve the pending -> reach Final.
+  it("H2: uphold-with-pending stays Challenged; resolving the pending reaches Final", async () => {
+    const cw = 5;
+    const exp = await toEvaluating(
+      expId("h2b"),
+      500_000,
+      windows({ challengeWindowSeconds: new BN(cw) })
+    );
+    const cA = Keypair.generate();
+    const cB = Keypair.generate();
+    const aAta = await fundChallenger(cA);
+    const bAta = await fundChallenger(cB);
+    await openChallengeBy(exp, cA, aAta);
+    await openChallengeBy(exp, cB, bAta);
+
+    // Uphold cA while cB pending -> remain Challenged.
+    await resolveChallengeBy(exp, cA, true, aAta);
+    let acc: any = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "challenged");
+    assert.equal(acc.openChallenges, 1);
+
+    // Resolve pending cB (dismissed -> forfeit to coordinator) -> open_challenges 0 -> Evaluating.
+    await resolveChallengeBy(exp, cB, false, coordinatorAta.address);
+    acc = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "evaluating");
+    assert.equal(acc.openChallenges, 0);
+    assert.isFalse(acc.evaluationValid);
+
+    const rr = h.merkleRootFromHashes([h.rewardLeafHash(p1.publicKey, 10n, 0n)]);
+    await submitEval(exp, rr);
+    await h.sleep((cw + 1) * 1000);
+    await finalize(exp, 10);
+    acc = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "final");
+  });
+
+  // (c) M1: an opened-then-dismissed challenge must NOT shortcut the finalize window.
+  it("M1: dismissed challenge does not shortcut the absolute finalize window", async () => {
+    const cw = 8;
+    const exp = await toEvaluating(
+      expId("m1"),
+      500_000,
+      windows({ challengeWindowSeconds: new BN(cw) })
+    );
+    const cA = Keypair.generate();
+    const aAta = await fundChallenger(cA);
+    await openChallengeBy(exp, cA, aAta);
+    // Dismiss immediately -> open_challenges 0 -> Evaluating, evaluation still valid.
+    await resolveChallengeBy(exp, cA, false, coordinatorAta.address);
+    let acc: any = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "evaluating");
+    assert.equal(acc.openChallenges, 0);
+    assert.isTrue(acc.evaluationValid);
+
+    // Window has NOT elapsed: finalize must still fail (no ever_challenged shortcut).
+    let failed = false;
+    try {
+      await finalize(exp, 10);
+    } catch (_) {
+      failed = true;
+    }
+    assert.isTrue(failed, "dismissed challenge must not shortcut the challenge window");
+
+    // Wait until the ABSOLUTE on-chain window end elapses, then finalize succeeds.
+    const windowEnd = Number(acc.challengeWindowEnd);
+    await h.sleep(Math.max(0, (windowEnd - nowSec() + 2) * 1000));
+    await finalize(exp, 10);
+    acc = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "final");
+  });
+
+  // (d) H1: abort_experiment returns the vault + refunds open bonds; rejected once finalized.
+  it("H1: abort (multisig) from Challenged returns the vault and refunds the open bond", async () => {
+    const budget = 500_000;
+    const exp = await toEvaluating(
+      expId("h1a"),
+      budget,
+      windows({ challengeWindowSeconds: new BN(30) }) // long window; we abort instead of finalizing
+    );
+    const cA = Keypair.generate();
+    const aAta = await fundChallenger(cA);
+    await openChallengeBy(exp, cA, aAta);
+    let acc: any = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "challenged");
+
+    const coordBefore = Number((await getAccount(conn, coordinatorAta.address)).amount);
+    const aBefore = Number((await getAccount(conn, aAta)).amount);
+
+    await abortExperiment(exp, [m1, m2]);
+    acc = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "closed");
+    assert.isTrue(acc.aborted);
+    // Full vault returned to coordinator; vault emptied.
+    assert.equal(
+      Number((await getAccount(conn, coordinatorAta.address)).amount) - coordBefore,
+      budget
+    );
+    assert.equal(Number((await getAccount(conn, h.vaultPda(exp))).amount), 0);
+
+    // Still-open bond refunded to challenger via the permissionless crank.
+    await refundBondBy(exp, cA, aAta);
+    assert.equal(Number((await getAccount(conn, aAta)).amount) - aBefore, 1_000_000);
+
+    // Replay: a second refund is rejected.
+    let failed = false;
+    try {
+      await refundBondBy(exp, cA, aAta);
+    } catch (_) {
+      failed = true;
+    }
+    assert.isTrue(failed, "double bond refund must be rejected");
+  });
+
+  it("H1: abort is rejected from Final (structurally rejected once any claim can exist)", async () => {
+    const cw = 3;
+    const exp = await toEvaluating(
+      expId("h1b"),
+      200_000,
+      windows({ challengeWindowSeconds: new BN(cw) })
+    );
+    await h.sleep((cw + 1) * 1000);
+    await finalize(exp, 10);
+    const acc: any = await registry.account.experiment.fetch(exp);
+    assert.deepEqual(Object.keys(acc.status)[0], "final");
+
+    let failed = false;
+    try {
+      await abortExperiment(exp, [m1, m2]);
+    } catch (_) {
+      failed = true;
+    }
+    assert.isTrue(failed, "abort must be rejected from Final (Distribution exists)");
+  });
+
+  it("H1: permissionless abort via timeout returns the vault without multisig", async () => {
+    const now = nowSec();
+    const budget = 300_000;
+    const { experiment } = await createExperiment(
+      expId("h1c"),
+      budget,
+      windows({ evaluationDeadline: new BN(now + 1) })
+    );
+    await freeze(experiment);
+    await publish(experiment); // Active
+    // Wait past evaluation_deadline + abort_grace_seconds.
+    await h.sleep((1 + ABORT_GRACE_SECONDS + 2) * 1000);
+    const coordBefore = Number((await getAccount(conn, coordinatorAta.address)).amount);
+    await abortExperiment(experiment, []); // no multisig -> permissionless timeout path
+    const acc: any = await registry.account.experiment.fetch(experiment);
+    assert.deepEqual(Object.keys(acc.status)[0], "closed");
+    assert.isTrue(acc.aborted);
+    assert.equal(
+      Number((await getAccount(conn, coordinatorAta.address)).amount) - coordBefore,
+      budget
+    );
   });
 });

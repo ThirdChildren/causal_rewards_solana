@@ -10,10 +10,19 @@ metadata:
 Anchor workspace at `mvp/causal-rewards/`. Four programs + one shared crate `crp-crypto` (sha256/merkle/seed/assignment; host-tested vs test-vectors).
 
 ## Program split & instructions
-- **experiment-registry** — owns `ProtocolConfig`, `Experiment`, `CohortSet`. Instructions: `init_protocol_config`, `create_experiment`, `freeze_experiment`, `publish_cohort_root`, `reveal_seed`. Also owns the **status field** and exposes CPI-only transitions: `mark_evaluating`, `mark_challenged`, `mark_evaluating_from_resolve`, `mark_final`, `mark_closed`.
+- **experiment-registry** — owns `ProtocolConfig`, `Experiment`, `CohortSet`. Instructions: `init_protocol_config`, `create_experiment`, `freeze_experiment`, `publish_cohort_root`, `reveal_seed`. Also owns the **status field** and exposes CPI-only transitions: `mark_evaluating`, `mark_challenged`, `resolve_upheld`, `resolve_dismissed`, `mark_final`, `mark_aborted`, `mark_closed`.
 - **evidence-registry** — owns `EvidenceEpoch`. `post_evidence_epoch`. Reads Experiment (no write).
-- **settlement** — owns `Evaluation`, `Distribution`, `ClaimReceipt`. `submit_evaluation`, `finalize_distribution`, `claim_reward`, `close_experiment`. CPIs experiment-registry for status.
-- **challenge** — owns `Challenge`. `open_challenge`, `resolve_challenge`. CPIs experiment-registry for status.
+- **settlement** — owns `Evaluation`, `Distribution`, `ClaimReceipt`. `submit_evaluation`, `finalize_distribution`, `claim_reward`, `close_experiment`, `abort_experiment`. CPIs experiment-registry for status.
+- **challenge** — owns `Challenge`. `open_challenge`, `resolve_challenge`, `refund_bond`. CPIs experiment-registry for status.
+
+## State-machine v1.1 (settlement-flow hardening; security findings H1/H2/M1)
+Spec `specs/state-machine.md` is behavior-version 1.1.0 (wire/hash contract still 1.0.0, no hashed artifact changed). Implemented:
+- **H2 multi-challenge (tx8).** `Experiment.open_challenges` (u32) is the SOLE gate for leaving `Challenged`. `resolve_upheld`/`resolve_dismissed` each decrement by 1 (checked_sub); upheld sets `evaluation_valid=false`; status returns to `Evaluating` ONLY when the counter hits 0 (order-independent). The challenge program's `resolve_challenge` releases exactly that one bond immediately (upheld→challenger, dismissed→`experiment.coordinator`).
+- **M1 finalize guard (tx9).** `mark_final` is taken ONLY from `Evaluating` and requires `now>=challenge_window_end AND open_challenges==0 AND evaluation_valid`. `ever_challenged` field/gate was REMOVED entirely. `challenge_window_end` is an ABSOLUTE unix ts written once by `mark_evaluating` at `submit_evaluation` (tx6); tx6 also allows the `Evaluating→Evaluating` corrected-resubmission self-loop when `!evaluation_valid && open_challenges==0`.
+- **H1 abort (tx12).** `settlement::abort_experiment` returns the FULL vault to `experiment.coordinator` and CPIs registry `mark_aborted` (Frozen/Active/Evaluating/Challenged → `Closed` with `aborted=true`; reuses Closed, no 8th status). Gate: multisig threshold OR permissionless timeout `now > evaluation_deadline + ProtocolConfig.abort_grace_seconds`. Defensive: asserts the Distribution PDA is uninitialized (structurally no claim can exist pre-Final). Bonds are under the CHALLENGE program's PDA authority, so they are refunded separately/permissionlessly via `challenge::refund_bond` (gated on `experiment.aborted`, resolution UNSET→REFUNDED replay guard). `mark_aborted` is NOT gated on `paused` (so pausing cannot trap funds).
+
+## Field model change (v1.1)
+`Experiment` phase bookkeeping: the old `evaluation_present`+`evaluation_invalidated`+`ever_challenged` trio was replaced by a single `evaluation_valid: bool` (starts false at create; true at submit; false after an upheld challenge). New: `aborted: bool`. `ProtocolConfig` gained `abort_grace_seconds: i64` (add to `init_protocol_config` args). `challenge::Challenge.resolution` now has code 3 = REFUNDED.
 
 ## Cross-program status ownership
 `Experiment.status` is written **only** by experiment-registry. Satellite programs advance it via **CPI into experiment-registry**, authenticated by a program-authority PDA: satellite signs the CPI with `seeds=[b"cpi_authority", bump]` under its own program id; experiment-registry verifies the signer PDA via Anchor `seeds::program = protocol_config.<caller>_program`. ProtocolConfig stores the three satellite program ids. Role signers (evaluator E, multisig M, challenger X, participant P) are enforced in the originating satellite instruction and passed through.

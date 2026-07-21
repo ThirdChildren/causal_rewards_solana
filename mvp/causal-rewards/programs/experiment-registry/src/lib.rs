@@ -37,7 +37,9 @@ pub mod experiment_registry {
         evidence_program: Pubkey,
         settlement_program: Pubkey,
         challenge_program: Pubkey,
+        abort_grace_seconds: i64,
     ) -> Result<()> {
+        require!(abort_grace_seconds >= 0, RegistryError::InvalidWindowOrdering);
         let cfg = &mut ctx.accounts.protocol_config;
         cfg.admin = ctx.accounts.admin.key();
         cfg.fee_bps = 0; // hard-zero fee (Invariant 7)
@@ -48,6 +50,7 @@ pub mod experiment_registry {
         cfg.evidence_program = evidence_program;
         cfg.settlement_program = settlement_program;
         cfg.challenge_program = challenge_program;
+        cfg.abort_grace_seconds = abort_grace_seconds;
         cfg.bump = ctx.bumps.protocol_config;
 
         emit!(ProtocolInitialized {
@@ -156,12 +159,11 @@ pub mod experiment_registry {
         exp.claim_window_seconds = args.claim_window_seconds;
         exp.cohort_published = false;
         exp.revealed_seed = None;
-        exp.evaluation_present = false;
-        exp.evaluation_invalidated = false;
-        exp.ever_challenged = false;
+        exp.evaluation_valid = false;
         exp.open_challenges = 0;
         exp.challenge_window_end = 0;
         exp.claim_window_end = 0;
+        exp.aborted = false;
         exp.created_at = now;
         exp.bump = ctx.bumps.experiment;
         exp.vault_bump = ctx.bumps.vault;
@@ -274,23 +276,32 @@ pub mod experiment_registry {
 
     // ---------------- CPI-only status transitions ----------------
 
-    /// Active -> Evaluating (or re-Evaluating after an upheld challenge). Settlement only.
+    /// tx6: Active -> Evaluating (first submission) or Evaluating -> Evaluating
+    /// (corrected re-submission after an upheld challenge). Settlement only.
+    ///
+    /// Writes the ABSOLUTE `challenge_window_end` once here (never derived elsewhere,
+    /// so no earlier event can shorten it — security finding M1), sets
+    /// `evaluation_valid = true`, and re-initializes `open_challenges = 0`.
     pub fn mark_evaluating(ctx: Context<MarkBySettlement>, challenge_window_end: i64) -> Result<()> {
         require!(!ctx.accounts.protocol_config.paused, RegistryError::Paused);
         let exp = &mut ctx.accounts.experiment;
         let from = exp.status;
+        // Active (first submit) OR Evaluating self-loop only to replace an
+        // invalidated evaluation once all challenges are resolved (state-machine tx6).
         let ok = matches!(from, ExperimentStatus::Active)
-            || (matches!(from, ExperimentStatus::Evaluating) && exp.evaluation_invalidated);
+            || (matches!(from, ExperimentStatus::Evaluating)
+                && !exp.evaluation_valid
+                && exp.open_challenges == 0);
         require!(ok, RegistryError::WrongStatus);
         exp.status = ExperimentStatus::Evaluating;
-        exp.evaluation_present = true;
-        exp.evaluation_invalidated = false;
+        exp.evaluation_valid = true;
+        exp.open_challenges = 0;
         exp.challenge_window_end = challenge_window_end;
         emit_transition(exp.key(), from, exp.status, ctx.accounts.protocol_config.settlement_program);
         Ok(())
     }
 
-    /// Evaluating|Challenged -> Challenged; increments open_challenges. Challenge program only.
+    /// tx7: Evaluating|Challenged -> Challenged; increments open_challenges. Challenge only.
     pub fn mark_challenged(ctx: Context<MarkByChallenge>) -> Result<()> {
         require!(!ctx.accounts.protocol_config.paused, RegistryError::Paused);
         let exp = &mut ctx.accounts.experiment;
@@ -299,59 +310,102 @@ pub mod experiment_registry {
             matches!(from, ExperimentStatus::Evaluating | ExperimentStatus::Challenged),
             RegistryError::WrongStatus
         );
-        require!(exp.evaluation_present && !exp.evaluation_invalidated, RegistryError::WrongStatus);
+        require!(exp.evaluation_valid, RegistryError::EvaluationNotValid);
         exp.open_challenges = exp.open_challenges.checked_add(1).ok_or(RegistryError::MathOverflow)?;
-        exp.ever_challenged = true;
         exp.status = ExperimentStatus::Challenged;
         emit_transition(exp.key(), from, exp.status, ctx.accounts.protocol_config.challenge_program);
         Ok(())
     }
 
-    /// Resolve a challenge as UPHELD: evaluation invalidated, back to Evaluating. Challenge only.
+    /// tx8: resolve exactly ONE challenge as UPHELD. Challenge only.
+    ///
+    /// `open_challenges` is the SOLE gate for leaving `Challenged` (security finding H2):
+    /// this decrements the counter by 1 and sets `evaluation_valid = false` (an upheld
+    /// resolution invalidates the evaluation regardless of order). State returns to
+    /// `Evaluating` only when `open_challenges` reaches 0; otherwise it stays `Challenged`
+    /// and every remaining challenge is still independently resolvable.
     pub fn resolve_upheld(ctx: Context<MarkByChallenge>) -> Result<()> {
         require!(!ctx.accounts.protocol_config.paused, RegistryError::Paused);
         let exp = &mut ctx.accounts.experiment;
         let from = exp.status;
         require!(matches!(from, ExperimentStatus::Challenged), RegistryError::WrongStatus);
         exp.open_challenges = exp.open_challenges.checked_sub(1).ok_or(RegistryError::MathOverflow)?;
-        exp.evaluation_invalidated = true;
-        exp.status = ExperimentStatus::Evaluating;
+        exp.evaluation_valid = false;
+        if exp.open_challenges == 0 {
+            exp.status = ExperimentStatus::Evaluating;
+        }
         emit_transition(exp.key(), from, exp.status, ctx.accounts.protocol_config.challenge_program);
         Ok(())
     }
 
-    /// Resolve a challenge as DISMISSED: decrement open_challenges; stay Challenged. Challenge only.
+    /// tx8: resolve exactly ONE challenge as DISMISSED. Challenge only.
+    ///
+    /// Decrements `open_challenges` by 1 and leaves `evaluation_valid` untouched. State
+    /// returns to `Evaluating` only when `open_challenges` reaches 0 (security finding H2);
+    /// a dismissed challenge NEVER shortcuts the finalize window for a not-yet-opened
+    /// honest challenge (security finding M1 — there is no `ever_challenged` flag).
     pub fn resolve_dismissed(ctx: Context<MarkByChallenge>) -> Result<()> {
         require!(!ctx.accounts.protocol_config.paused, RegistryError::Paused);
         let exp = &mut ctx.accounts.experiment;
         let from = exp.status;
         require!(matches!(from, ExperimentStatus::Challenged), RegistryError::WrongStatus);
         exp.open_challenges = exp.open_challenges.checked_sub(1).ok_or(RegistryError::MathOverflow)?;
+        if exp.open_challenges == 0 {
+            exp.status = ExperimentStatus::Evaluating;
+        }
         emit_transition(exp.key(), from, exp.status, ctx.accounts.protocol_config.challenge_program);
         Ok(())
     }
 
-    /// Evaluating|Challenged -> Final. Settlement only.
+    /// tx9: Evaluating -> Final. Settlement only.
+    ///
+    /// Guard (security finding M1): finalize is taken ONLY from `Evaluating` and requires
+    /// the conjunction `now >= challenge_window_end AND open_challenges == 0 AND
+    /// evaluation_valid`. There is no `ever_challenged` short-circuit.
     pub fn mark_final(ctx: Context<MarkBySettlement>, claim_window_end: i64) -> Result<()> {
         require!(!ctx.accounts.protocol_config.paused, RegistryError::Paused);
         let now = Clock::get()?.unix_timestamp;
         let exp = &mut ctx.accounts.experiment;
         let from = exp.status;
-        require!(
-            matches!(from, ExperimentStatus::Evaluating | ExperimentStatus::Challenged),
-            RegistryError::WrongStatus
-        );
-        require!(exp.evaluation_present, RegistryError::WrongStatus);
-        require!(!exp.evaluation_invalidated, RegistryError::EvaluationInvalidated);
+        require!(matches!(from, ExperimentStatus::Evaluating), RegistryError::WrongStatus);
+        require!(exp.evaluation_valid, RegistryError::EvaluationNotValid);
         require!(exp.open_challenges == 0, RegistryError::OpenChallengesRemain);
-        // window elapsed OR at least one challenge already fully resolved (spec transition 9).
-        require!(
-            now >= exp.challenge_window_end || exp.ever_challenged,
-            RegistryError::ChallengeWindowNotElapsed
-        );
+        require!(now >= exp.challenge_window_end, RegistryError::ChallengeWindowNotElapsed);
         exp.status = ExperimentStatus::Final;
         exp.claim_window_end = claim_window_end;
         emit_transition(exp.key(), from, exp.status, ctx.accounts.protocol_config.settlement_program);
+        Ok(())
+    }
+
+    /// tx12: {Frozen,Active,Evaluating,Challenged} -> Closed (`aborted = true`). Settlement only.
+    ///
+    /// The authorization gate (multisig OR permissionless timeout) and the vault return +
+    /// still-open-bond refunds live in the settlement/challenge programs; this transition
+    /// enforces only the legal status set and stamps the `aborted` marker. NOT gated on
+    /// `paused` — abort is the bounded escape from the pre-`Final` fund trap (H1) and must
+    /// remain reachable so funds can never be trapped by pausing.
+    pub fn mark_aborted(ctx: Context<MarkBySettlement>) -> Result<()> {
+        let exp = &mut ctx.accounts.experiment;
+        let from = exp.status;
+        require!(
+            matches!(
+                from,
+                ExperimentStatus::Frozen
+                    | ExperimentStatus::Active
+                    | ExperimentStatus::Evaluating
+                    | ExperimentStatus::Challenged
+            ),
+            RegistryError::AbortNotAllowed
+        );
+        require!(!exp.aborted, RegistryError::AlreadyAborted);
+        exp.aborted = true;
+        exp.status = ExperimentStatus::Closed;
+        emit_transition(exp.key(), from, exp.status, ctx.accounts.protocol_config.settlement_program);
+        emit!(ExperimentAborted {
+            experiment: exp.key(),
+            from: from as u8,
+            open_challenges: exp.open_challenges,
+        });
         Ok(())
     }
 

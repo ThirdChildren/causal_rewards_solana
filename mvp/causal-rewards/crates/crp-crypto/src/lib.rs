@@ -183,14 +183,17 @@ pub fn seed_commitment(seed: &[u8; 32]) -> [u8; 32] {
 }
 
 // ---------------------------------------------------------------------------
-// Reward leaf (PROVISIONAL M2 — see agent-memory/spec-open-items; §6.2 defers this)
+// Reward leaf (RATIFIED — serialization.md §6.6)
 // ---------------------------------------------------------------------------
 
-/// PROVISIONAL fixed-width reward leaf content (48 bytes):
+/// Fixed-width reward leaf content (48 bytes), RATIFIED unchanged in
+/// `serialization.md` §6.6:
 /// `recipient(32) || amount_base_units(u64 BE) || leaf_index(u64 BE)`.
-/// leaf_hash = SHA-256(0x00 || "CRP:reward:v1" || content). Big-endian for
-/// cross-language determinism. MUST be ratified into serialization.md §6.2 before
-/// any reward golden root is committed.
+/// leaf_hash = SHA-256(0x00 || "CRP:reward:v1" || content). Big-endian is fixed by
+/// §6.6 for cross-language hash determinism (Invariant 2). §6.6 ratifies this exact
+/// layout, so the encoding below is the canonical reward-leaf preimage the reward
+/// tree and `claim_reward` prove against (the §6.2 reward-ordering deferral is
+/// likewise resolved in §6.6: leaf position == `leaf_index`, contiguous from 0).
 pub fn reward_leaf_content(recipient: &[u8; 32], amount_base_units: u64, leaf_index: u64) -> [u8; 48] {
     let mut out = [0u8; 48];
     out[0..32].copy_from_slice(recipient);

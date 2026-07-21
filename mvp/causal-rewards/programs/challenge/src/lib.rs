@@ -19,6 +19,9 @@ pub const CPI_AUTHORITY_SEED: &[u8] = b"cpi_authority";
 pub const RESOLUTION_UNSET: u8 = 0;
 pub const RESOLUTION_UPHELD: u8 = 1;
 pub const RESOLUTION_DISMISSED: u8 = 2;
+/// Bond returned to the challenger because the experiment was aborted (tx12) before
+/// this challenge was adjudicated. Un-adjudicated bonds are refunded, never forfeited.
+pub const RESOLUTION_REFUNDED: u8 = 3;
 
 #[program]
 pub mod challenge {
@@ -31,7 +34,7 @@ pub mod challenge {
             matches!(exp.status, ExperimentStatus::Evaluating | ExperimentStatus::Challenged),
             ChallengeError::WrongStatus
         );
-        require!(exp.evaluation_present && !exp.evaluation_invalidated, ChallengeError::NoLiveEvaluation);
+        require!(exp.evaluation_valid, ChallengeError::NoLiveEvaluation);
         require!(now <= exp.challenge_window_end, ChallengeError::ChallengeWindowClosed);
         require!(
             bond_amount >= exp.challenge_bond_base_units,
@@ -173,6 +176,58 @@ pub mod challenge {
         });
         Ok(())
     }
+
+    /// Refund a still-open challenge bond after the experiment was aborted (tx12).
+    ///
+    /// Permissionless crank: unlocked once `experiment.aborted == true` (set by
+    /// `settlement::abort_experiment`). Returns THIS challenge's escrowed bond to its
+    /// challenger — an un-adjudicated bond is refunded, never forfeited. Replay-protected
+    /// by requiring `resolution == UNSET` and stamping `RESOLUTION_REFUNDED`. Already
+    /// resolved challenges keep their prior resolution and are ineligible here.
+    pub fn refund_bond(ctx: Context<RefundBond>) -> Result<()> {
+        let exp = &ctx.accounts.experiment;
+        require!(exp.aborted, ChallengeError::NotAborted);
+        require!(
+            ctx.accounts.challenge.resolution == RESOLUTION_UNSET,
+            ChallengeError::AlreadyResolved
+        );
+        // Bond returns to the original challenger.
+        require_keys_eq!(
+            ctx.accounts.bond_destination.owner,
+            ctx.accounts.challenge.challenger,
+            ChallengeError::WrongBondDestination
+        );
+
+        let amount = ctx.accounts.bond_vault.amount;
+        if amount > 0 {
+            let exp_key = exp.key();
+            let challenger = ctx.accounts.challenge.challenger;
+            let ch_bump = ctx.accounts.challenge.bump;
+            let signer: &[&[&[u8]]] =
+                &[&[b"challenge", exp_key.as_ref(), challenger.as_ref(), &[ch_bump]]];
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.key(),
+                    Transfer {
+                        from: ctx.accounts.bond_vault.to_account_info(),
+                        to: ctx.accounts.bond_destination.to_account_info(),
+                        authority: ctx.accounts.challenge.to_account_info(),
+                    },
+                    signer,
+                ),
+                amount,
+            )?;
+        }
+
+        ctx.accounts.challenge.resolution = RESOLUTION_REFUNDED;
+
+        emit!(BondRefunded {
+            experiment: exp.key(),
+            challenger: ctx.accounts.challenge.challenger,
+            amount,
+        });
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -244,6 +299,28 @@ pub struct ResolveChallenge<'info> {
     // m-of-n multisig signers in remaining_accounts.
 }
 
+#[derive(Accounts)]
+pub struct RefundBond<'info> {
+    #[account(seeds = [b"protocol_config"], bump = protocol_config.bump, seeds::program = experiment_registry_program.key())]
+    pub protocol_config: Account<'info, ProtocolConfig>,
+    pub experiment: Account<'info, Experiment>,
+    #[account(
+        mut,
+        seeds = [b"challenge", experiment.key().as_ref(), challenge.challenger.as_ref()],
+        bump = challenge.bump,
+        has_one = experiment @ ChallengeError::WrongExperiment
+    )]
+    pub challenge: Account<'info, Challenge>,
+    #[account(mut, address = challenge.bond_vault @ ChallengeError::WrongBondVault)]
+    pub bond_vault: Account<'info, TokenAccount>,
+    #[account(mut, constraint = bond_destination.mint == experiment.mint @ ChallengeError::MintMismatch)]
+    pub bond_destination: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub cranker: Signer<'info>,
+    pub experiment_registry_program: Program<'info, ExperimentRegistry>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[account]
 pub struct Challenge {
     pub experiment: Pubkey,
@@ -273,6 +350,13 @@ pub struct ChallengeResolved {
     pub upheld: bool,
 }
 
+#[event]
+pub struct BondRefunded {
+    pub experiment: Pubkey,
+    pub challenger: Pubkey,
+    pub amount: u64,
+}
+
 #[error_code]
 pub enum ChallengeError {
     #[msg("Experiment is not in the required status")]
@@ -297,4 +381,6 @@ pub enum ChallengeError {
     Unauthorized,
     #[msg("Token mint mismatch")]
     MintMismatch,
+    #[msg("Experiment has not been aborted; bond refund is not available")]
+    NotAborted,
 }

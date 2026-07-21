@@ -34,9 +34,14 @@ pub mod settlement {
         let now = Clock::get()?.unix_timestamp;
         let exp = &ctx.accounts.experiment;
 
-        // Guards (state-machine transition 6).
+        // Guards (state-machine v1.1 tx6): Active (first submission) OR the
+        // Evaluating -> Evaluating self-loop to replace an evaluation that a prior
+        // challenge upheld as invalid (`evaluation_valid == false`) once every
+        // challenge is resolved (`open_challenges == 0`).
         let first_submit = exp.status == ExperimentStatus::Active;
-        let resubmit = exp.status == ExperimentStatus::Evaluating && exp.evaluation_invalidated;
+        let resubmit = exp.status == ExperimentStatus::Evaluating
+            && !exp.evaluation_valid
+            && exp.open_challenges == 0;
         require!(first_submit || resubmit, SettlementError::WrongStatus);
         require_keys_eq!(ctx.accounts.evaluator.key(), exp.evaluator, SettlementError::Unauthorized);
         require!(exp.revealed_seed.is_some(), SettlementError::SeedNotRevealed);
@@ -269,6 +274,88 @@ pub mod settlement {
         });
         Ok(())
     }
+
+    /// tx12 (state-machine v1.1, security finding H1): the bounded escape from the
+    /// pre-`Final` fund trap. Returns the FULL experiment vault to `experiment.coordinator`
+    /// and drives the experiment to `Closed` with `aborted = true` (via registry CPI).
+    ///
+    /// Reachable from any pre-`Final` state (`Frozen`/`Active`/`Evaluating`/`Challenged`),
+    /// gated by EITHER a multisig threshold (signers in `remaining_accounts`) OR a
+    /// permissionless timeout `now > evaluation_deadline + abort_grace_seconds`. It is
+    /// structurally impossible after any claim (a `ClaimReceipt` only exists from `Final`,
+    /// which abort cannot reach); the `Distribution`-does-not-exist assertion below makes
+    /// that fact locally checkable rather than relying on reachability alone.
+    ///
+    /// Still-open `Challenge` bonds are escrowed under the CHALLENGE program's PDA authority
+    /// and cannot be moved from here; they are refunded to their challengers permissionlessly
+    /// via `challenge::refund_bond`, which is unlocked once `experiment.aborted == true`.
+    pub fn abort_experiment(ctx: Context<AbortExperiment>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let exp = &ctx.accounts.experiment;
+
+        // Defensive: no Distribution (and therefore no ClaimReceipt) may exist. The PDA
+        // account must be uninitialized. Structurally guaranteed pre-`Final`; asserted here.
+        require!(
+            ctx.accounts.distribution.data_is_empty(),
+            SettlementError::DistributionExists
+        );
+
+        // Authorization: multisig threshold OR permissionless timeout.
+        let timed_out = now
+            > exp
+                .evaluation_deadline
+                .checked_add(ctx.accounts.protocol_config.abort_grace_seconds)
+                .ok_or(SettlementError::MathOverflow)?;
+        if !timed_out {
+            experiment_registry::verify_multisig(
+                ctx.remaining_accounts,
+                &exp.authority_signers,
+                exp.authority_threshold,
+            )
+            .map_err(|_| error!(SettlementError::AbortNotAuthorized))?;
+        }
+
+        // Return the full vault balance to the coordinator (funder). Pre-`Final` the vault
+        // is untouched, so this is the entire budget.
+        let recovered = ctx.accounts.vault.amount;
+        if recovered > 0 {
+            let exp_key = exp.key();
+            let va_bump = ctx.bumps.vault_authority;
+            let signer: &[&[&[u8]]] = &[&[VAULT_AUTHORITY_SEED, exp_key.as_ref(), &[va_bump]]];
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.key(),
+                    Transfer {
+                        from: ctx.accounts.vault.to_account_info(),
+                        to: ctx.accounts.recovery_token.to_account_info(),
+                        authority: ctx.accounts.vault_authority.to_account_info(),
+                    },
+                    signer,
+                ),
+                recovered,
+            )?;
+        }
+
+        // CPI: registry advances pre-`Final` -> Closed (aborted = true).
+        let bump = ctx.bumps.cpi_authority;
+        let seeds: &[&[&[u8]]] = &[&[CPI_AUTHORITY_SEED, &[bump]]];
+        experiment_registry::cpi::mark_aborted(CpiContext::new_with_signer(
+            ctx.accounts.experiment_registry_program.key(),
+            experiment_registry::cpi::accounts::MarkBySettlement {
+                protocol_config: ctx.accounts.protocol_config.to_account_info(),
+                experiment: ctx.accounts.experiment.to_account_info(),
+                caller_authority: ctx.accounts.cpi_authority.to_account_info(),
+            },
+            seeds,
+        ))?;
+
+        emit!(ExperimentAborted {
+            experiment: ctx.accounts.experiment.key(),
+            recovered_base_units: recovered,
+            permissionless: timed_out,
+        });
+        Ok(())
+    }
 }
 
 // ---------------- Accounts ----------------
@@ -383,6 +470,37 @@ pub struct CloseExperiment<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+#[derive(Accounts)]
+pub struct AbortExperiment<'info> {
+    #[account(seeds = [b"protocol_config"], bump = protocol_config.bump, seeds::program = experiment_registry_program.key())]
+    pub protocol_config: Account<'info, ProtocolConfig>,
+    #[account(mut)]
+    pub experiment: Account<'info, Experiment>,
+    /// CHECK: the Distribution PDA. MUST be uninitialized (asserted in-handler): abort is
+    /// only legal before any Distribution/ClaimReceipt exists.
+    #[account(seeds = [b"distribution", experiment.key().as_ref()], bump)]
+    pub distribution: UncheckedAccount<'info>,
+    #[account(mut, address = experiment.vault @ SettlementError::WrongVault)]
+    pub vault: Account<'info, TokenAccount>,
+    /// CHECK: settlement vault-authority PDA (token authority of the vault).
+    #[account(seeds = [VAULT_AUTHORITY_SEED, experiment.key().as_ref()], bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        constraint = recovery_token.mint == experiment.mint @ SettlementError::MintMismatch,
+        constraint = recovery_token.owner == experiment.coordinator @ SettlementError::Unauthorized
+    )]
+    pub recovery_token: Account<'info, TokenAccount>,
+    /// CHECK: settlement's CPI-authority PDA; signs the status CPI.
+    #[account(seeds = [CPI_AUTHORITY_SEED], bump)]
+    pub cpi_authority: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub cranker: Signer<'info>,
+    pub experiment_registry_program: Program<'info, ExperimentRegistry>,
+    pub token_program: Program<'info, Token>,
+    // m-of-n multisig signers in remaining_accounts (only required on the non-timeout path).
+}
+
 // ---------------- State ----------------
 
 #[account]
@@ -464,6 +582,14 @@ pub struct ExperimentClosed {
     pub recovered_base_units: u64,
 }
 
+#[event]
+pub struct ExperimentAborted {
+    pub experiment: Pubkey,
+    pub recovered_base_units: u64,
+    /// true if taken via the permissionless timeout path, false if via multisig.
+    pub permissionless: bool,
+}
+
 // ---------------- Errors ----------------
 
 #[error_code]
@@ -500,4 +626,8 @@ pub enum SettlementError {
     MintMismatch,
     #[msg("Checked arithmetic overflow")]
     MathOverflow,
+    #[msg("A Distribution already exists; abort is only legal before finalize")]
+    DistributionExists,
+    #[msg("abort_experiment not authorized: multisig threshold not met and timeout not elapsed")]
+    AbortNotAuthorized,
 }
