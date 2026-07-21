@@ -15,32 +15,51 @@ cannot be "done" while a Critical/High is open. SDK is meant to be built against
 **How to apply:** consult before any re-review; do not re-litigate resolved items; verify
 each open item against current code (grep the instruction) before re-reporting.
 
-## OPEN findings (status as of 2026-07-20)
+## RESOLVED findings (re-review 2026-07-21, state-machine v1.1)
 
-- **H1 — Pre-Final budget stranding (settlement).** Only recovery instruction is
-  `close_experiment`, gated on `status == Final`. No abort/cancel/timeout for
-  Draft/Frozen/Active/Evaluating/Challenged. If coordinator never reveals or evaluator never
-  submits (or multisig never finalizes), the funded vault is permanently locked. Directly
-  contradicts threat-model §3.1 ("budget is recovered via close_experiment" for the stall case).
-  Fix: add multisig/timeout recovery reachable from pre-Final states. Devnet + self-funded
-  reduces blast radius but the promised mitigation does not exist.
-- **H2 — Multi-challenge upheld strands pending challenges + blocks finality (challenge +
-  registry).** `resolve_upheld` unconditionally sets status=Evaluating and decrements
-  open_challenges by 1, ignoring other still-open challenges. With ≥2 simultaneous challenges
-  (expected per threat-model §3.4), upholding one leaves status=Evaluating with open_challenges>0;
-  the other Challenge is now unresolvable (resolve requires status==Challenged), its bond is
-  locked in bond_vault forever, and `mark_final` (needs open_challenges==0) can never fire →
-  finality blocked indefinitely. Spec transition 8 intends Challenged→Challenged when others
-  pending; code diverges. Fix: only go to Evaluating when the decrement reaches 0, else stay
-  Challenged; ensure every opened challenge remains resolvable and its bond releasable.
-  UNTESTED — integration tests only cover single dismissed challenge.
+- **H1 — CLOSED (2026-07-21).** `settlement::abort_experiment` (lib.rs L292-358) +
+  `registry::mark_aborted` (L387-410) + `challenge::refund_bond` (L187-230) added. Pre-Final
+  escape: multisig OR permissionless timeout (`now > evaluation_deadline + abort_grace_seconds`);
+  vault returns only to `experiment.coordinator` (recovery_token owner constraint); open bonds
+  refunded exactly once (UNSET->REFUNDED guard, replay-rejected); unreachable after finalize
+  (distribution.data_is_empty assertion + mark_aborted status set excludes Final); not paused-gated
+  so pause can't trap funds. Verified + tested. NOTE new Warning W1 (permissionless-abort race), below.
+- **H2 — CLOSED (2026-07-21).** `resolve_upheld`/`resolve_dismissed` (registry L327-358) each
+  resolve one challenge, decrement open_challenges via checked_sub, and leave `Challenged` ONLY at
+  0. checked_sub cannot underflow (Challenged implies open_challenges>=1). Bond released exactly
+  once per challenge (challenge::resolve_challenge UNSET-guard, own bond_vault, order-independent).
+  Tested: two concurrent order-independent + uphold-with-pending.
+- **M1 — CLOSED (2026-07-21).** `mark_final` (registry L365-378) = Evaluating AND evaluation_valid
+  AND open_challenges==0 AND now>=challenge_window_end AND multisig. `ever_challenged` fully removed
+  from logic (only doc/IDL text remains). `challenge_window_end` written only in mark_evaluating
+  (per-evaluation, forward-only from submit time) — cannot be moved to shortcut the window. Tested.
+
+## NEW findings (re-review 2026-07-21)
+
+- **W1 (Warning, should-fix, NOT a GO-blocker) — permissionless-timeout abort can preempt a
+  finalizable evaluation (settlement::abort_experiment L304-316).** `finalize_distribution` has no
+  upper time bound and needs multisig; the permissionless abort opens at `evaluation_deadline +
+  abort_grace_seconds` (global config, NOT validated against per-experiment
+  `challenge_window_seconds` at create). If grace is small relative to challenge_window, or simply
+  once past the timeout while a slow multisig hasn't finalized yet, ANY caller can abort a valid,
+  ready-to-finalize evaluation from `Evaluating` — nuking the settlement (funds back to coordinator,
+  earned rewards never paid). No theft (coordinator recovers budget), so devnet-acceptable, but it
+  is a liveness/griefing weakness that inverts the "finality can't be blocked" property. Fix:
+  (a) enforce `abort_grace_seconds > challenge_window_seconds` at create_experiment, and/or
+  (b) block the permissionless (timed_out) branch when `status==Evaluating && evaluation_valid`
+  (leave multisig-abort available) — combine with a generous grace so a live multisig always wins
+  the race. Stall cases (evaluation_valid==false) stay permissionlessly abortable.
+- **W2 (Warning / economic, should-fix before any real value) — dismissed-bond forfeit to
+  coordinator is a collusion incentive (challenge::resolve_challenge L113-119).** Resolution is
+  multisig-gated and the coordinator is typically aligned with the multisig; a coordinator-controlled
+  multisig can DISMISS a valid challenge (that correctly flags a bad evaluation), pocket the honest
+  challenger's bond, and finalize an inflated distribution. threat-model §3.4 only offers an
+  off-chain deterrent (verifier re-run / reproducibility), no on-chain control; the collusion row is
+  not even listed. Devnet-acceptable (zero-value bonds). Recommend routing dismissed forfeits to a
+  NEUTRAL sink (burn or config treasury not controlled by coordinator) and adding the collusion row
+  to §3.4. Preserves anti-griefing cost, removes the adjudicator's financial stake in the outcome.
 
 ## MEDIUM / LOW / INFO (open, non-blocking)
-
-- **M1 — `ever_challenged` short-circuits the challenge window (registry `mark_final` L348-351).**
-  `now >= challenge_window_end || ever_challenged`. One early opened+dismissed challenge lets
-  finalize proceed immediately, collapsing the window for all not-yet-opened honest challenges.
-  Matches frozen spec transition 9 wording, so fixing needs a protocol-architect spec change.
 - **M2 — Reward-leaf determinism boundary (crp-crypto L189-206 + settlement claim).** On-chain
   claim hard-depends on the PROVISIONAL 48-byte BE preimage `recipient||amount_be||index_be`.
   serialization.md §6.2 defers reward leaf identity/ordering to M3. If M3 ratifies a different

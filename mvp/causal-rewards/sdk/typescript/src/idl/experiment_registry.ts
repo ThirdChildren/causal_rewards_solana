@@ -1,20 +1,20 @@
 /**
- * Program IDL in camelCase format in order to be used in JS/TS.
+ * Program IDL in Anchor 0.30.1 native format (snake_case), regenerated from
+ * the CURRENT published idl/experiment_registry.json. Pairs with new Program(<json>) at runtime.
  *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/experiment_registry.json`.
+ * Auto-generated: do not edit by hand. Re-copy from idl/ when the program changes.
  */
 export type ExperimentRegistry = {
   "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj",
   "metadata": {
-    "name": "experimentRegistry",
+    "name": "experiment_registry",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Causal Rewards Protocol — experiment registry (frozen manifest hash, funding, status, windows, authorities, seed commitment/reveal)."
+    "description": "Causal Rewards Protocol \u2014 experiment registry (frozen manifest hash, funding, status, windows, authorities, seed commitment/reveal)."
   },
   "instructions": [
     {
-      "name": "createExperiment",
+      "name": "create_experiment",
       "discriminator": [
         13,
         224,
@@ -27,7 +27,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -75,7 +75,7 @@ export type ExperimentRegistry = {
               },
               {
                 "kind": "arg",
-                "path": "experimentIdHash"
+                "path": "experiment_id_hash"
               }
             ]
           }
@@ -103,13 +103,13 @@ export type ExperimentRegistry = {
           }
         },
         {
-          "name": "vaultAuthority"
+          "name": "vault_authority"
         },
         {
           "name": "mint"
         },
         {
-          "name": "coordinatorFunding",
+          "name": "coordinator_funding",
           "writable": true
         },
         {
@@ -118,11 +118,11 @@ export type ExperimentRegistry = {
           "signer": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         },
         {
@@ -132,7 +132,7 @@ export type ExperimentRegistry = {
       ],
       "args": [
         {
-          "name": "experimentIdHash",
+          "name": "experiment_id_hash",
           "type": {
             "array": [
               "u8",
@@ -144,14 +144,14 @@ export type ExperimentRegistry = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "createExperimentArgs"
+              "name": "CreateExperimentArgs"
             }
           }
         }
       ]
     },
     {
-      "name": "freezeExperiment",
+      "name": "freeze_experiment",
       "docs": [
         "Freeze: record the manifest hash and lock the immutability set. Multisig only."
       ],
@@ -167,7 +167,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -200,7 +200,7 @@ export type ExperimentRegistry = {
       ],
       "args": [
         {
-          "name": "manifestHash",
+          "name": "manifest_hash",
           "type": {
             "array": [
               "u8",
@@ -211,7 +211,7 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "initProtocolConfig",
+      "name": "init_protocol_config",
       "discriminator": [
         91,
         97,
@@ -224,7 +224,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "writable": true,
           "pda": {
             "seeds": [
@@ -257,47 +257,57 @@ export type ExperimentRegistry = {
           "signer": true
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "schemaVersion",
+          "name": "schema_version",
           "type": "u16"
         },
         {
-          "name": "evidenceProgram",
+          "name": "evidence_program",
           "type": "pubkey"
         },
         {
-          "name": "settlementProgram",
+          "name": "settlement_program",
           "type": "pubkey"
         },
         {
-          "name": "challengeProgram",
+          "name": "challenge_program",
           "type": "pubkey"
+        },
+        {
+          "name": "abort_grace_seconds",
+          "type": "i64"
         }
       ]
     },
     {
-      "name": "markChallenged",
+      "name": "mark_aborted",
       "docs": [
-        "Evaluating|Challenged -> Challenged; increments open_challenges. Challenge program only."
+        "tx12: {Frozen,Active,Evaluating,Challenged} -> Closed (`aborted = true`). Settlement only.",
+        "",
+        "The authorization gate (multisig OR permissionless timeout) and the vault return +",
+        "still-open-bond refunds live in the settlement/challenge programs; this transition",
+        "enforces only the legal status set and stamps the `aborted` marker. NOT gated on",
+        "`paused` \u2014 abort is the bounded escape from the pre-`Final` fund trap (H1) and must",
+        "remain reachable so funds can never be trapped by pausing."
       ],
       "discriminator": [
-        88,
-        18,
-        123,
-        227,
-        101,
-        198,
-        104,
-        240
+        169,
+        22,
+        33,
+        5,
+        212,
+        202,
+        207,
+        169
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -328,7 +338,64 @@ export type ExperimentRegistry = {
           "writable": true
         },
         {
-          "name": "callerAuthority",
+          "name": "caller_authority",
+          "docs": [
+            "Authorizes the caller: PDA of the SETTLEMENT program signs this CPI."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "mark_challenged",
+      "docs": [
+        "tx7: Evaluating|Challenged -> Challenged; increments open_challenges. Challenge only."
+      ],
+      "discriminator": [
+        88,
+        18,
+        123,
+        227,
+        101,
+        198,
+        104,
+        240
+      ],
+      "accounts": [
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "experiment",
+          "writable": true
+        },
+        {
+          "name": "caller_authority",
           "docs": [
             "Authorizes the caller: PDA of the CHALLENGE program signs this CPI."
           ],
@@ -338,7 +405,7 @@ export type ExperimentRegistry = {
       "args": []
     },
     {
-      "name": "markClosed",
+      "name": "mark_closed",
       "docs": [
         "Final -> Closed. Settlement only."
       ],
@@ -354,7 +421,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -385,7 +452,7 @@ export type ExperimentRegistry = {
           "writable": true
         },
         {
-          "name": "callerAuthority",
+          "name": "caller_authority",
           "docs": [
             "Authorizes the caller: PDA of the SETTLEMENT program signs this CPI."
           ],
@@ -395,9 +462,14 @@ export type ExperimentRegistry = {
       "args": []
     },
     {
-      "name": "markEvaluating",
+      "name": "mark_evaluating",
       "docs": [
-        "Active -> Evaluating (or re-Evaluating after an upheld challenge). Settlement only."
+        "tx6: Active -> Evaluating (first submission) or Evaluating -> Evaluating",
+        "(corrected re-submission after an upheld challenge). Settlement only.",
+        "",
+        "Writes the ABSOLUTE `challenge_window_end` once here (never derived elsewhere,",
+        "so no earlier event can shorten it \u2014 security finding M1), sets",
+        "`evaluation_valid = true`, and re-initializes `open_challenges = 0`."
       ],
       "discriminator": [
         123,
@@ -411,7 +483,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -442,7 +514,7 @@ export type ExperimentRegistry = {
           "writable": true
         },
         {
-          "name": "callerAuthority",
+          "name": "caller_authority",
           "docs": [
             "Authorizes the caller: PDA of the SETTLEMENT program signs this CPI."
           ],
@@ -451,15 +523,19 @@ export type ExperimentRegistry = {
       ],
       "args": [
         {
-          "name": "challengeWindowEnd",
+          "name": "challenge_window_end",
           "type": "i64"
         }
       ]
     },
     {
-      "name": "markFinal",
+      "name": "mark_final",
       "docs": [
-        "Evaluating|Challenged -> Final. Settlement only."
+        "tx9: Evaluating -> Final. Settlement only.",
+        "",
+        "Guard (security finding M1): finalize is taken ONLY from `Evaluating` and requires",
+        "the conjunction `now >= challenge_window_end AND open_challenges == 0 AND",
+        "evaluation_valid`. There is no `ever_challenged` short-circuit."
       ],
       "discriminator": [
         76,
@@ -473,7 +549,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -504,7 +580,7 @@ export type ExperimentRegistry = {
           "writable": true
         },
         {
-          "name": "callerAuthority",
+          "name": "caller_authority",
           "docs": [
             "Authorizes the caller: PDA of the SETTLEMENT program signs this CPI."
           ],
@@ -513,13 +589,13 @@ export type ExperimentRegistry = {
       ],
       "args": [
         {
-          "name": "claimWindowEnd",
+          "name": "claim_window_end",
           "type": "i64"
         }
       ]
     },
     {
-      "name": "publishCohortRoot",
+      "name": "publish_cohort_root",
       "docs": [
         "Publish the assignment/cohort Merkle root. Coordinator only. Frozen -> Active.",
         "Commits the assignment BEFORE the seed can be revealed (freeze-before-reveal)."
@@ -536,7 +612,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -567,7 +643,7 @@ export type ExperimentRegistry = {
           "writable": true
         },
         {
-          "name": "cohortSet",
+          "name": "cohort_set",
           "writable": true,
           "pda": {
             "seeds": [
@@ -599,13 +675,13 @@ export type ExperimentRegistry = {
           "signer": true
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "cohortRoot",
+          "name": "cohort_root",
           "type": {
             "array": [
               "u8",
@@ -614,15 +690,20 @@ export type ExperimentRegistry = {
           }
         },
         {
-          "name": "cohortCount",
+          "name": "cohort_count",
           "type": "u32"
         }
       ]
     },
     {
-      "name": "resolveDismissed",
+      "name": "resolve_dismissed",
       "docs": [
-        "Resolve a challenge as DISMISSED: decrement open_challenges; stay Challenged. Challenge only."
+        "tx8: resolve exactly ONE challenge as DISMISSED. Challenge only.",
+        "",
+        "Decrements `open_challenges` by 1 and leaves `evaluation_valid` untouched. State",
+        "returns to `Evaluating` only when `open_challenges` reaches 0 (security finding H2);",
+        "a dismissed challenge NEVER shortcuts the finalize window for a not-yet-opened",
+        "honest challenge (security finding M1 \u2014 there is no `ever_challenged` flag)."
       ],
       "discriminator": [
         124,
@@ -636,7 +717,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -667,7 +748,7 @@ export type ExperimentRegistry = {
           "writable": true
         },
         {
-          "name": "callerAuthority",
+          "name": "caller_authority",
           "docs": [
             "Authorizes the caller: PDA of the CHALLENGE program signs this CPI."
           ],
@@ -677,9 +758,15 @@ export type ExperimentRegistry = {
       "args": []
     },
     {
-      "name": "resolveUpheld",
+      "name": "resolve_upheld",
       "docs": [
-        "Resolve a challenge as UPHELD: evaluation invalidated, back to Evaluating. Challenge only."
+        "tx8: resolve exactly ONE challenge as UPHELD. Challenge only.",
+        "",
+        "`open_challenges` is the SOLE gate for leaving `Challenged` (security finding H2):",
+        "this decrements the counter by 1 and sets `evaluation_valid = false` (an upheld",
+        "resolution invalidates the evaluation regardless of order). State returns to",
+        "`Evaluating` only when `open_challenges` reaches 0; otherwise it stays `Challenged`",
+        "and every remaining challenge is still independently resolvable."
       ],
       "discriminator": [
         206,
@@ -693,7 +780,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -724,7 +811,7 @@ export type ExperimentRegistry = {
           "writable": true
         },
         {
-          "name": "callerAuthority",
+          "name": "caller_authority",
           "docs": [
             "Authorizes the caller: PDA of the CHALLENGE program signs this CPI."
           ],
@@ -734,7 +821,7 @@ export type ExperimentRegistry = {
       "args": []
     },
     {
-      "name": "revealSeed",
+      "name": "reveal_seed",
       "docs": [
         "Reveal the seed. Coordinator only. Verifies the commitment on-chain (Invariant 1)."
       ],
@@ -750,7 +837,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -798,9 +885,9 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "setPaused",
+      "name": "set_paused",
       "docs": [
-        "Emergency pause / unpause. Admin only. Cannot rewrite any frozen record — it",
+        "Emergency pause / unpause. Admin only. Cannot rewrite any frozen record \u2014 it",
         "merely blocks advancing instructions (Invariant: constrained authority)."
       ],
       "discriminator": [
@@ -815,7 +902,7 @@ export type ExperimentRegistry = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "writable": true,
           "pda": {
             "seeds": [
@@ -846,7 +933,7 @@ export type ExperimentRegistry = {
           "name": "admin",
           "signer": true,
           "relations": [
-            "protocolConfig"
+            "protocol_config"
           ]
         }
       ],
@@ -860,7 +947,7 @@ export type ExperimentRegistry = {
   ],
   "accounts": [
     {
-      "name": "cohortSet",
+      "name": "CohortSet",
       "discriminator": [
         64,
         195,
@@ -873,7 +960,7 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "experiment",
+      "name": "Experiment",
       "discriminator": [
         93,
         88,
@@ -886,7 +973,7 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "protocolConfig",
+      "name": "ProtocolConfig",
       "discriminator": [
         207,
         91,
@@ -901,7 +988,7 @@ export type ExperimentRegistry = {
   ],
   "events": [
     {
-      "name": "cohortRootPublished",
+      "name": "CohortRootPublished",
       "discriminator": [
         40,
         59,
@@ -914,7 +1001,20 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "experimentCreated",
+      "name": "ExperimentAborted",
+      "discriminator": [
+        191,
+        142,
+        47,
+        239,
+        108,
+        171,
+        159,
+        5
+      ]
+    },
+    {
+      "name": "ExperimentCreated",
       "discriminator": [
         161,
         226,
@@ -927,7 +1027,7 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "experimentFrozen",
+      "name": "ExperimentFrozen",
       "discriminator": [
         161,
         60,
@@ -940,7 +1040,7 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "protocolInitialized",
+      "name": "ProtocolInitialized",
       "discriminator": [
         173,
         122,
@@ -953,7 +1053,7 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "seedRevealed",
+      "name": "SeedRevealed",
       "discriminator": [
         28,
         28,
@@ -966,7 +1066,7 @@ export type ExperimentRegistry = {
       ]
     },
     {
-      "name": "statusTransitioned",
+      "name": "StatusTransitioned",
       "discriminator": [
         75,
         47,
@@ -982,123 +1082,133 @@ export type ExperimentRegistry = {
   "errors": [
     {
       "code": 6000,
-      "name": "notDevnet",
+      "name": "NotDevnet",
       "msg": "Protocol config cluster is not devnet (Invariant 7)"
     },
     {
       "code": 6001,
-      "name": "feeNotZero",
+      "name": "FeeNotZero",
       "msg": "Fee must be hard-zero (Invariant 7)"
     },
     {
       "code": 6002,
-      "name": "paused",
+      "name": "Paused",
       "msg": "Protocol is paused (emergency)"
     },
     {
       "code": 6003,
-      "name": "wrongStatus",
+      "name": "WrongStatus",
       "msg": "Experiment is not in the required status for this transition"
     },
     {
       "code": 6004,
-      "name": "unauthorized",
+      "name": "Unauthorized",
       "msg": "Signer is not authorized for this action"
     },
     {
       "code": 6005,
-      "name": "multisigThresholdNotMet",
+      "name": "MultisigThresholdNotMet",
       "msg": "Multisig threshold not met"
     },
     {
       "code": 6006,
-      "name": "invalidMultisig",
+      "name": "InvalidMultisig",
       "msg": "Invalid multisig configuration"
     },
     {
       "code": 6007,
-      "name": "invalidExperimentId",
+      "name": "InvalidExperimentId",
       "msg": "experiment_id is empty or too long"
     },
     {
       "code": 6008,
-      "name": "invalidWindowOrdering",
+      "name": "InvalidWindowOrdering",
       "msg": "Window ordering invalid: require active_start <= active_end <= evaluation_deadline"
     },
     {
       "code": 6009,
-      "name": "freezeDeadlinePassed",
+      "name": "FreezeDeadlinePassed",
       "msg": "freeze_by is in the past"
     },
     {
       "code": 6010,
-      "name": "freezeWindowClosed",
+      "name": "FreezeWindowClosed",
       "msg": "Freeze deadline has passed; cannot freeze"
     },
     {
       "code": 6011,
-      "name": "seedCommitmentMismatch",
+      "name": "SeedCommitmentMismatch",
       "msg": "Revealed seed does not open the frozen seed commitment (Invariant 1)"
     },
     {
       "code": 6012,
-      "name": "seedAlreadyRevealed",
+      "name": "SeedAlreadyRevealed",
       "msg": "Seed already revealed; assignment cannot be re-chosen"
     },
     {
       "code": 6013,
-      "name": "cohortAlreadyPublished",
+      "name": "CohortAlreadyPublished",
       "msg": "Cohort root already published"
     },
     {
       "code": 6014,
-      "name": "cohortNotPublished",
+      "name": "CohortNotPublished",
       "msg": "Seed must be revealed only after the cohort root is published"
     },
     {
       "code": 6015,
-      "name": "unauthorizedCaller",
+      "name": "UnauthorizedCaller",
       "msg": "Caller program is not the registered authority for this transition"
     },
     {
       "code": 6016,
-      "name": "evaluationInvalidated",
-      "msg": "Evaluation was invalidated by an upheld challenge; resubmit required"
+      "name": "EvaluationNotValid",
+      "msg": "Evaluation is not valid (never submitted, or invalidated by an upheld challenge; resubmit required)"
     },
     {
       "code": 6017,
-      "name": "challengeWindowNotElapsed",
-      "msg": "Challenge window has not elapsed and challenges remain unresolved"
+      "name": "ChallengeWindowNotElapsed",
+      "msg": "Challenge window has not elapsed"
     },
     {
       "code": 6018,
-      "name": "openChallengesRemain",
+      "name": "OpenChallengesRemain",
       "msg": "Open challenges remain unresolved"
     },
     {
       "code": 6019,
-      "name": "claimWindowNotElapsed",
+      "name": "ClaimWindowNotElapsed",
       "msg": "Claim window has not elapsed"
     },
     {
       "code": 6020,
-      "name": "mathOverflow",
+      "name": "MathOverflow",
       "msg": "Checked arithmetic overflow"
     },
     {
       "code": 6021,
-      "name": "invalidThreshold",
+      "name": "InvalidThreshold",
       "msg": "Threshold must be >= 1 and <= number of signers"
     },
     {
       "code": 6022,
-      "name": "mintMismatch",
+      "name": "MintMismatch",
       "msg": "Vault mint does not match experiment mint"
+    },
+    {
+      "code": 6023,
+      "name": "AbortNotAllowed",
+      "msg": "abort_experiment is only reachable from a pre-Final state (Frozen/Active/Evaluating/Challenged)"
+    },
+    {
+      "code": 6024,
+      "name": "AlreadyAborted",
+      "msg": "Experiment already aborted"
     }
   ],
   "types": [
     {
-      "name": "cohortRootPublished",
+      "name": "CohortRootPublished",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1107,7 +1217,7 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "cohortRoot",
+            "name": "cohort_root",
             "type": {
               "array": [
                 "u8",
@@ -1116,14 +1226,14 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "cohortCount",
+            "name": "cohort_count",
             "type": "u32"
           }
         ]
       }
     },
     {
-      "name": "cohortSet",
+      "name": "CohortSet",
       "docs": [
         "Assignment/cohort commitment. Published BEFORE the seed is revealed."
       ],
@@ -1135,7 +1245,7 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "cohortRoot",
+            "name": "cohort_root",
             "type": {
               "array": [
                 "u8",
@@ -1144,7 +1254,7 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "cohortCount",
+            "name": "cohort_count",
             "type": "u32"
           },
           {
@@ -1155,12 +1265,12 @@ export type ExperimentRegistry = {
       }
     },
     {
-      "name": "createExperimentArgs",
+      "name": "CreateExperimentArgs",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "experimentId",
+            "name": "experiment_id",
             "type": "string"
           },
           {
@@ -1168,17 +1278,17 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "authorityThreshold",
+            "name": "authority_threshold",
             "type": "u8"
           },
           {
-            "name": "authoritySigners",
+            "name": "authority_signers",
             "type": {
               "vec": "pubkey"
             }
           },
           {
-            "name": "analysisContainerDigest",
+            "name": "analysis_container_digest",
             "type": {
               "array": [
                 "u8",
@@ -1187,7 +1297,7 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "rewardCurveHash",
+            "name": "reward_curve_hash",
             "type": {
               "array": [
                 "u8",
@@ -1196,7 +1306,7 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "seedCommitment",
+            "name": "seed_commitment",
             "type": {
               "array": [
                 "u8",
@@ -1205,42 +1315,42 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "budgetBaseUnits",
+            "name": "budget_base_units",
             "type": "u64"
           },
           {
-            "name": "challengeBondBaseUnits",
+            "name": "challenge_bond_base_units",
             "type": "u64"
           },
           {
-            "name": "freezeBy",
+            "name": "freeze_by",
             "type": "i64"
           },
           {
-            "name": "activeStart",
+            "name": "active_start",
             "type": "i64"
           },
           {
-            "name": "activeEnd",
+            "name": "active_end",
             "type": "i64"
           },
           {
-            "name": "evaluationDeadline",
+            "name": "evaluation_deadline",
             "type": "i64"
           },
           {
-            "name": "challengeWindowSeconds",
+            "name": "challenge_window_seconds",
             "type": "i64"
           },
           {
-            "name": "claimWindowSeconds",
+            "name": "claim_window_seconds",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "experiment",
+      "name": "Experiment",
       "docs": [
         "Per-experiment record. Holds only hashes / roots / status / windows (Invariant 5)."
       ],
@@ -1251,7 +1361,7 @@ export type ExperimentRegistry = {
             "name": "status",
             "type": {
               "defined": {
-                "name": "experimentStatus"
+                "name": "ExperimentStatus"
               }
             }
           },
@@ -1264,24 +1374,24 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "authorityThreshold",
+            "name": "authority_threshold",
             "docs": [
               "m-of-n multisig."
             ],
             "type": "u8"
           },
           {
-            "name": "authoritySigners",
+            "name": "authority_signers",
             "type": {
               "vec": "pubkey"
             }
           },
           {
-            "name": "experimentId",
+            "name": "experiment_id",
             "type": "string"
           },
           {
-            "name": "manifestHash",
+            "name": "manifest_hash",
             "type": {
               "array": [
                 "u8",
@@ -1290,7 +1400,7 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "analysisContainerDigest",
+            "name": "analysis_container_digest",
             "type": {
               "array": [
                 "u8",
@@ -1299,7 +1409,7 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "rewardCurveHash",
+            "name": "reward_curve_hash",
             "type": {
               "array": [
                 "u8",
@@ -1308,7 +1418,7 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "seedCommitment",
+            "name": "seed_commitment",
             "type": {
               "array": [
                 "u8",
@@ -1325,43 +1435,43 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "budgetBaseUnits",
+            "name": "budget_base_units",
             "type": "u64"
           },
           {
-            "name": "challengeBondBaseUnits",
+            "name": "challenge_bond_base_units",
             "type": "u64"
           },
           {
-            "name": "freezeBy",
+            "name": "freeze_by",
             "type": "i64"
           },
           {
-            "name": "activeStart",
+            "name": "active_start",
             "type": "i64"
           },
           {
-            "name": "activeEnd",
+            "name": "active_end",
             "type": "i64"
           },
           {
-            "name": "evaluationDeadline",
+            "name": "evaluation_deadline",
             "type": "i64"
           },
           {
-            "name": "challengeWindowSeconds",
+            "name": "challenge_window_seconds",
             "type": "i64"
           },
           {
-            "name": "claimWindowSeconds",
+            "name": "claim_window_seconds",
             "type": "i64"
           },
           {
-            "name": "cohortPublished",
+            "name": "cohort_published",
             "type": "bool"
           },
           {
-            "name": "revealedSeed",
+            "name": "revealed_seed",
             "docs": [
               "Revealed once, after publish_cohort_root (freeze-before-reveal, Invariant 1)."
             ],
@@ -1375,31 +1485,47 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "evaluationPresent",
+            "name": "evaluation_valid",
+            "docs": [
+              "True iff a live, non-invalidated `Evaluation` is present (set at",
+              "`submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).",
+              "It is the sole `evaluation is finalizable` predicate (state-machine v1.1);",
+              "starts `false` at create (no evaluation yet). Replaces the previous",
+              "`evaluation_present`/`evaluation_invalidated` pair and the removed",
+              "`ever_challenged` gate (security findings H2/M1)."
+            ],
             "type": "bool"
           },
           {
-            "name": "evaluationInvalidated",
-            "type": "bool"
-          },
-          {
-            "name": "everChallenged",
-            "type": "bool"
-          },
-          {
-            "name": "openChallenges",
+            "name": "open_challenges",
+            "docs": [
+              "`open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of",
+              "unresolved `Challenge` accounts; checked_add/sub only."
+            ],
             "type": "u32"
           },
           {
-            "name": "challengeWindowEnd",
+            "name": "challenge_window_end",
+            "docs": [
+              "Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window",
+              "is defined only here so no earlier event can shorten it (security finding M1)."
+            ],
             "type": "i64"
           },
           {
-            "name": "claimWindowEnd",
+            "name": "claim_window_end",
             "type": "i64"
           },
           {
-            "name": "createdAt",
+            "name": "aborted",
+            "docs": [
+              "Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted",
+              "(pre-`Final` escape from the fund trap, security finding H1). No 8th status word."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
             "type": "i64"
           },
           {
@@ -1407,14 +1533,18 @@ export type ExperimentRegistry = {
             "type": "u8"
           },
           {
-            "name": "vaultBump",
+            "name": "vault_bump",
             "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "experimentCreated",
+      "name": "ExperimentAborted",
+      "docs": [
+        "Emitted when `abort_experiment` (tx12) drives a pre-`Final` experiment to",
+        "`Closed` with `aborted = true` (security finding H1)."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -1423,7 +1553,34 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "experimentId",
+            "name": "from",
+            "docs": [
+              "Status the experiment was in immediately before abort."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "open_challenges",
+            "docs": [
+              "Open challenges recorded at abort time (their bonds are refundable via the",
+              "challenge program's `refund_bond` crank)."
+            ],
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExperimentCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "experiment",
+            "type": "pubkey"
+          },
+          {
+            "name": "experiment_id",
             "type": "string"
           },
           {
@@ -1435,7 +1592,7 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "seedCommitment",
+            "name": "seed_commitment",
             "type": {
               "array": [
                 "u8",
@@ -1444,14 +1601,14 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "budgetBaseUnits",
+            "name": "budget_base_units",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "experimentFrozen",
+      "name": "ExperimentFrozen",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1460,7 +1617,7 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "manifestHash",
+            "name": "manifest_hash",
             "type": {
               "array": [
                 "u8",
@@ -1472,36 +1629,36 @@ export type ExperimentRegistry = {
       }
     },
     {
-      "name": "experimentStatus",
+      "name": "ExperimentStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "draft"
+            "name": "Draft"
           },
           {
-            "name": "frozen"
+            "name": "Frozen"
           },
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "evaluating"
+            "name": "Evaluating"
           },
           {
-            "name": "challenged"
+            "name": "Challenged"
           },
           {
-            "name": "final"
+            "name": "Final"
           },
           {
-            "name": "closed"
+            "name": "Closed"
           }
         ]
       }
     },
     {
-      "name": "protocolConfig",
+      "name": "ProtocolConfig",
       "docs": [
         "Global config. Created once at program init."
       ],
@@ -1513,7 +1670,7 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "feeBps",
+            "name": "fee_bps",
             "docs": [
               "Hard-zero fee (Invariant 7). Asserted == 0 at init."
             ],
@@ -1534,23 +1691,32 @@ export type ExperimentRegistry = {
             "type": "u8"
           },
           {
-            "name": "schemaVersion",
+            "name": "schema_version",
             "type": "u16"
           },
           {
-            "name": "evidenceProgram",
+            "name": "evidence_program",
             "docs": [
               "Registered satellite program ids authorized to advance Experiment.status via CPI."
             ],
             "type": "pubkey"
           },
           {
-            "name": "settlementProgram",
+            "name": "settlement_program",
             "type": "pubkey"
           },
           {
-            "name": "challengeProgram",
+            "name": "challenge_program",
             "type": "pubkey"
+          },
+          {
+            "name": "abort_grace_seconds",
+            "docs": [
+              "Timeout offset (seconds) for the permissionless `abort_experiment` path",
+              "(state-machine v1.1 tx12): abort is permissionlessly reachable once",
+              "`now > evaluation_deadline + abort_grace_seconds`."
+            ],
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -1560,7 +1726,7 @@ export type ExperimentRegistry = {
       }
     },
     {
-      "name": "protocolInitialized",
+      "name": "ProtocolInitialized",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1569,14 +1735,14 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "schemaVersion",
+            "name": "schema_version",
             "type": "u16"
           }
         ]
       }
     },
     {
-      "name": "seedRevealed",
+      "name": "SeedRevealed",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1585,7 +1751,7 @@ export type ExperimentRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "seedCommitment",
+            "name": "seed_commitment",
             "type": {
               "array": [
                 "u8",
@@ -1594,7 +1760,7 @@ export type ExperimentRegistry = {
             }
           },
           {
-            "name": "revealedSeed",
+            "name": "revealed_seed",
             "type": {
               "array": [
                 "u8",
@@ -1606,7 +1772,7 @@ export type ExperimentRegistry = {
       }
     },
     {
-      "name": "statusTransitioned",
+      "name": "StatusTransitioned",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1623,7 +1789,7 @@ export type ExperimentRegistry = {
             "type": "u8"
           },
           {
-            "name": "callerProgram",
+            "name": "caller_program",
             "type": "pubkey"
           }
         ]

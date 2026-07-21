@@ -165,6 +165,11 @@ version**. They advance independently; a behavior-only change does not bump the 
   on-chain accounting"): `Distribution.total_allocated_base_units` is an advisory upper bound
   (≤ budget), not cryptographically bound to the sum of reward leaves; the verifier CLI plus the
   challenge flow are the real guardrail (Invariant 6 — the chain verifies process, not truth).
+- **Two deferred hardening items disclosed (no behavior change).** The M2 re-review's two Warnings
+  touching this document — W2 (tx8 dismissed-challenge bond forfeits to the coordinator) and W1
+  (tx12 permissionless timeout-abort can discard a valid in-window evaluation because tx1 does not
+  enforce `abort_grace_seconds > challenge_window_seconds`) — are disclosed in `threat-model.md` §5,
+  accepted for the devnet MVP (Invariant 7) and tracked for M4. No tx behavior changes here.
 
 ### v1.0.0 — initial frozen-READY state machine
 

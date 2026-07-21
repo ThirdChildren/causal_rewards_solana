@@ -37,7 +37,18 @@ metadata:
 
 **ORCHESTRATOR DECISION (bond forfeit):** dismissed-challenge bond → experiment.coordinator (per v1.1 tx8) accepted for devnet MVP (no real value, invariant 7). FLAGGED for security re-review: coordinator/multisig could collude to dismiss valid challenges + pocket bonds; if this ever nears real value, move to a neutral sink (burn/treasury). Architect offered to adjudicate if we prefer neutral now.
 
-**solana-program-engineer FIX PASS RUNNING (ae9f9bb1):** H1(abort)+H2(multi-challenge)+M1(tx9)+new fields+4 new tests+crp-crypto comment cleanup+IDL regen. Then: security-reviewer RE-REVIEW, then SDK completion against new IDL (SDK partial on disk uncommitted).
+**solana-program-engineer FIX PASS DONE, committed c0bbb0f (2026-07-21).** H1/H2/M1 closed per v1.1. Orchestrator verified: crp-crypto 8/8, manifest+evidence goldens intact, NO salt regression (state-machine.md line 45 is the correct salt-free wording — program agent's flag was false alarm). Agent reports anchor build 0 + anchor test 18/18 (incl 4 new: concurrent-challenge order-independence, uphold-with-pending reaches Final, dismissed doesn't shortcut window, abort returns vault/refunds/rejected-from-Final+timeout case). New instr mark_aborted/abort_experiment/refund_bond; Challenge.resolution 3=REFUNDED; removed evaluation_present/evaluation_invalidated/ever_challenged. IDLs republished. NOTE: 18/18 anchor tests NOT independently re-run (needs validator) — re-run at devnet gate.
+
+**NOW RUNNING (parallel):**
+- security-reviewer RE-REVIEW (afb51e4c): changed instructions, confirm H1/H2/M1 closed, new regressions, bond-forfeit collusion recommendation.
+- sdk-engineer COMPLETION (a1d54f6d): finish SDK against REPUBLISHED IDLs (re-copy current idl/*.json — gained abort_experiment/refund_bond/mark_aborted + new fields), reproduce all 11 assignment roots (gate), clients for 12 instr + fetchers + claim helper + example + tests. Builds on crashed-run partial in sdk/typescript/src/.
+
+**security-reviewer RE-REVIEW: GO (conditional on devnet gate). H1/H2/M1 all CLOSED with file:line evidence.** Two new Warnings, NOT GO-blockers for devnet MVP:
+- W1 (liveness): permissionless-timeout abort_experiment can preempt a finalizable evaluation; abort_grace_seconds not validated vs challenge_window_seconds. Fix: require grace>window at create AND/OR reject timeout-abort when evaluation_valid. TRACKED for M4 hardening (owner solana-program-engineer). Devnet-acceptable (no theft).
+- W2 (economic): dismissed-bond→coordinator collusion incentive. Neutral sink (burn/treasury) before real value. TRACKED for M4 (architect specs sink + program implements). Devnet MVP keeps coordinator-forfeit, DISCLOSED in threat-model §3.4.
+Orchestrator dispatched architect (doc-only) to add threat-model §3.4 collusion row + W1 note now (honest risk disclosure). W1 code + W2 sink deferred to M4 hardening (in CONTEXT_HANDOFF discrepancy table rows 3-4).
+
+**M2 GATE remaining:** SDK 11-root cross-impl agreement (sdk-engineer a1d54f6d running) + devnet deploy & 18/18 integration re-run at gate. Security = GO.
 - sdk-engineer: RUNNING (a0b7e100) — TS SDK against IDLs; must reproduce all 11 assignment roots + §6.6 reward leaf (third leg of the cross-impl agreement). Python mirror deferred.
 
 **Salt erratum confirmed needed:** program agent independently flagged the same stale salt in state-machine.md — already fixed (commit 1268cbc). Good corroboration.

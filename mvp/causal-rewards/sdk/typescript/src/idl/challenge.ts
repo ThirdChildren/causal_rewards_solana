@@ -1,8 +1,8 @@
 /**
- * Program IDL in camelCase format in order to be used in JS/TS.
+ * Program IDL in Anchor 0.30.1 native format (snake_case), regenerated from
+ * the CURRENT published idl/challenge.json. Pairs with new Program(<json>) at runtime.
  *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/challenge.json`.
+ * Auto-generated: do not edit by hand. Re-copy from idl/ when the program changes.
  */
 export type Challenge = {
   "address": "J9MfPYVhveHLLRnGBUiMxJqCLJP6s5ZUn7e5h3mnsG4z",
@@ -10,11 +10,11 @@ export type Challenge = {
     "name": "challenge",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Causal Rewards Protocol — challenge (bond escrow, finality pause, resolution per frozen policy)."
+    "description": "Causal Rewards Protocol \u2014 challenge (bond escrow, finality pause, resolution per frozen policy)."
   },
   "instructions": [
     {
-      "name": "openChallenge",
+      "name": "open_challenge",
       "discriminator": [
         56,
         176,
@@ -27,7 +27,7 @@ export type Challenge = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -53,7 +53,7 @@ export type Challenge = {
             ],
             "program": {
               "kind": "account",
-              "path": "experimentRegistryProgram"
+              "path": "experiment_registry_program"
             }
           }
         },
@@ -92,7 +92,7 @@ export type Challenge = {
           }
         },
         {
-          "name": "bondVault",
+          "name": "bond_vault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -122,11 +122,11 @@ export type Challenge = {
           "name": "mint"
         },
         {
-          "name": "challengerToken",
+          "name": "challenger_token",
           "writable": true
         },
         {
-          "name": "cpiAuthority",
+          "name": "cpi_authority",
           "pda": {
             "seeds": [
               {
@@ -156,15 +156,15 @@ export type Challenge = {
           "signer": true
         },
         {
-          "name": "experimentRegistryProgram",
+          "name": "experiment_registry_program",
           "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         },
         {
@@ -174,34 +174,39 @@ export type Challenge = {
       ],
       "args": [
         {
-          "name": "reasonCode",
+          "name": "reason_code",
           "type": "u16"
         },
         {
-          "name": "bondAmount",
+          "name": "bond_amount",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "resolveChallenge",
+      "name": "refund_bond",
       "docs": [
-        "Resolve a challenge. Multisig-gated. `upheld = true` invalidates the evaluation",
-        "and returns the bond; `upheld = false` dismisses and forfeits the bond."
+        "Refund a still-open challenge bond after the experiment was aborted (tx12).",
+        "",
+        "Permissionless crank: unlocked once `experiment.aborted == true` (set by",
+        "`settlement::abort_experiment`). Returns THIS challenge's escrowed bond to its",
+        "challenger \u2014 an un-adjudicated bond is refunded, never forfeited. Replay-protected",
+        "by requiring `resolution == UNSET` and stamping `RESOLUTION_REFUNDED`. Already",
+        "resolved challenges keep their prior resolution and are ineligible here."
       ],
       "discriminator": [
-        81,
-        191,
-        124,
-        119,
-        131,
-        248,
-        157,
-        109
+        109,
+        18,
+        121,
+        67,
+        25,
+        121,
+        130,
+        179
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -227,7 +232,116 @@ export type Challenge = {
             ],
             "program": {
               "kind": "account",
-              "path": "experimentRegistryProgram"
+              "path": "experiment_registry_program"
+            }
+          }
+        },
+        {
+          "name": "experiment",
+          "relations": [
+            "challenge"
+          ]
+        },
+        {
+          "name": "challenge",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  108,
+                  108,
+                  101,
+                  110,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "experiment"
+              },
+              {
+                "kind": "account",
+                "path": "challenge.challenger",
+                "account": "Challenge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bond_vault",
+          "writable": true
+        },
+        {
+          "name": "bond_destination",
+          "writable": true
+        },
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "experiment_registry_program",
+          "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolve_challenge",
+      "docs": [
+        "Resolve a challenge. Multisig-gated. `upheld = true` invalidates the evaluation",
+        "and returns the bond; `upheld = false` dismisses and forfeits the bond."
+      ],
+      "discriminator": [
+        81,
+        191,
+        124,
+        119,
+        131,
+        248,
+        157,
+        109
+      ],
+      "accounts": [
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "experiment_registry_program"
             }
           }
         },
@@ -264,21 +378,21 @@ export type Challenge = {
               {
                 "kind": "account",
                 "path": "challenge.challenger",
-                "account": "challenge"
+                "account": "Challenge"
               }
             ]
           }
         },
         {
-          "name": "bondVault",
+          "name": "bond_vault",
           "writable": true
         },
         {
-          "name": "bondDestination",
+          "name": "bond_destination",
           "writable": true
         },
         {
-          "name": "cpiAuthority",
+          "name": "cpi_authority",
           "pda": {
             "seeds": [
               {
@@ -308,11 +422,11 @@ export type Challenge = {
           "signer": true
         },
         {
-          "name": "experimentRegistryProgram",
+          "name": "experiment_registry_program",
           "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
@@ -326,7 +440,7 @@ export type Challenge = {
   ],
   "accounts": [
     {
-      "name": "challenge",
+      "name": "Challenge",
       "discriminator": [
         119,
         250,
@@ -341,7 +455,20 @@ export type Challenge = {
   ],
   "events": [
     {
-      "name": "challengeOpened",
+      "name": "BondRefunded",
+      "discriminator": [
+        52,
+        32,
+        75,
+        36,
+        37,
+        139,
+        123,
+        17
+      ]
+    },
+    {
+      "name": "ChallengeOpened",
       "discriminator": [
         42,
         83,
@@ -354,7 +481,7 @@ export type Challenge = {
       ]
     },
     {
-      "name": "challengeResolved",
+      "name": "ChallengeResolved",
       "discriminator": [
         100,
         153,
@@ -370,63 +497,68 @@ export type Challenge = {
   "errors": [
     {
       "code": 6000,
-      "name": "wrongStatus",
+      "name": "WrongStatus",
       "msg": "Experiment is not in the required status"
     },
     {
       "code": 6001,
-      "name": "noLiveEvaluation",
+      "name": "NoLiveEvaluation",
       "msg": "No live evaluation to challenge"
     },
     {
       "code": 6002,
-      "name": "challengeWindowClosed",
+      "name": "ChallengeWindowClosed",
       "msg": "Challenge window is closed"
     },
     {
       "code": 6003,
-      "name": "bondTooLow",
+      "name": "BondTooLow",
       "msg": "Bond is below the required minimum"
     },
     {
       "code": 6004,
-      "name": "alreadyResolved",
+      "name": "AlreadyResolved",
       "msg": "Challenge already resolved"
     },
     {
       "code": 6005,
-      "name": "multisigThresholdNotMet",
+      "name": "MultisigThresholdNotMet",
       "msg": "Multisig threshold not met"
     },
     {
       "code": 6006,
-      "name": "wrongBondDestination",
+      "name": "WrongBondDestination",
       "msg": "Bond destination owner is wrong for this resolution"
     },
     {
       "code": 6007,
-      "name": "wrongBondVault",
+      "name": "WrongBondVault",
       "msg": "Bond vault does not match challenge"
     },
     {
       "code": 6008,
-      "name": "wrongExperiment",
+      "name": "WrongExperiment",
       "msg": "Challenge does not belong to this experiment"
     },
     {
       "code": 6009,
-      "name": "unauthorized",
+      "name": "Unauthorized",
       "msg": "Signer not authorized"
     },
     {
       "code": 6010,
-      "name": "mintMismatch",
+      "name": "MintMismatch",
       "msg": "Token mint mismatch"
+    },
+    {
+      "code": 6011,
+      "name": "NotAborted",
+      "msg": "Experiment has not been aborted; bond refund is not available"
     }
   ],
   "types": [
     {
-      "name": "challenge",
+      "name": "BondRefunded",
       "type": {
         "kind": "struct",
         "fields": [
@@ -439,11 +571,31 @@ export type Challenge = {
             "type": "pubkey"
           },
           {
-            "name": "bondAmount",
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Challenge",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "experiment",
+            "type": "pubkey"
+          },
+          {
+            "name": "challenger",
+            "type": "pubkey"
+          },
+          {
+            "name": "bond_amount",
             "type": "u64"
           },
           {
-            "name": "reasonCode",
+            "name": "reason_code",
             "type": "u16"
           },
           {
@@ -451,7 +603,7 @@ export type Challenge = {
             "type": "u8"
           },
           {
-            "name": "bondVault",
+            "name": "bond_vault",
             "type": "pubkey"
           },
           {
@@ -462,7 +614,7 @@ export type Challenge = {
       }
     },
     {
-      "name": "challengeOpened",
+      "name": "ChallengeOpened",
       "type": {
         "kind": "struct",
         "fields": [
@@ -475,18 +627,18 @@ export type Challenge = {
             "type": "pubkey"
           },
           {
-            "name": "reasonCode",
+            "name": "reason_code",
             "type": "u16"
           },
           {
-            "name": "bondAmount",
+            "name": "bond_amount",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "challengeResolved",
+      "name": "ChallengeResolved",
       "type": {
         "kind": "struct",
         "fields": [
@@ -506,7 +658,7 @@ export type Challenge = {
       }
     },
     {
-      "name": "experiment",
+      "name": "Experiment",
       "docs": [
         "Per-experiment record. Holds only hashes / roots / status / windows (Invariant 5)."
       ],
@@ -517,7 +669,7 @@ export type Challenge = {
             "name": "status",
             "type": {
               "defined": {
-                "name": "experimentStatus"
+                "name": "ExperimentStatus"
               }
             }
           },
@@ -530,24 +682,24 @@ export type Challenge = {
             "type": "pubkey"
           },
           {
-            "name": "authorityThreshold",
+            "name": "authority_threshold",
             "docs": [
               "m-of-n multisig."
             ],
             "type": "u8"
           },
           {
-            "name": "authoritySigners",
+            "name": "authority_signers",
             "type": {
               "vec": "pubkey"
             }
           },
           {
-            "name": "experimentId",
+            "name": "experiment_id",
             "type": "string"
           },
           {
-            "name": "manifestHash",
+            "name": "manifest_hash",
             "type": {
               "array": [
                 "u8",
@@ -556,7 +708,7 @@ export type Challenge = {
             }
           },
           {
-            "name": "analysisContainerDigest",
+            "name": "analysis_container_digest",
             "type": {
               "array": [
                 "u8",
@@ -565,7 +717,7 @@ export type Challenge = {
             }
           },
           {
-            "name": "rewardCurveHash",
+            "name": "reward_curve_hash",
             "type": {
               "array": [
                 "u8",
@@ -574,7 +726,7 @@ export type Challenge = {
             }
           },
           {
-            "name": "seedCommitment",
+            "name": "seed_commitment",
             "type": {
               "array": [
                 "u8",
@@ -591,43 +743,43 @@ export type Challenge = {
             "type": "pubkey"
           },
           {
-            "name": "budgetBaseUnits",
+            "name": "budget_base_units",
             "type": "u64"
           },
           {
-            "name": "challengeBondBaseUnits",
+            "name": "challenge_bond_base_units",
             "type": "u64"
           },
           {
-            "name": "freezeBy",
+            "name": "freeze_by",
             "type": "i64"
           },
           {
-            "name": "activeStart",
+            "name": "active_start",
             "type": "i64"
           },
           {
-            "name": "activeEnd",
+            "name": "active_end",
             "type": "i64"
           },
           {
-            "name": "evaluationDeadline",
+            "name": "evaluation_deadline",
             "type": "i64"
           },
           {
-            "name": "challengeWindowSeconds",
+            "name": "challenge_window_seconds",
             "type": "i64"
           },
           {
-            "name": "claimWindowSeconds",
+            "name": "claim_window_seconds",
             "type": "i64"
           },
           {
-            "name": "cohortPublished",
+            "name": "cohort_published",
             "type": "bool"
           },
           {
-            "name": "revealedSeed",
+            "name": "revealed_seed",
             "docs": [
               "Revealed once, after publish_cohort_root (freeze-before-reveal, Invariant 1)."
             ],
@@ -641,31 +793,47 @@ export type Challenge = {
             }
           },
           {
-            "name": "evaluationPresent",
+            "name": "evaluation_valid",
+            "docs": [
+              "True iff a live, non-invalidated `Evaluation` is present (set at",
+              "`submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).",
+              "It is the sole `evaluation is finalizable` predicate (state-machine v1.1);",
+              "starts `false` at create (no evaluation yet). Replaces the previous",
+              "`evaluation_present`/`evaluation_invalidated` pair and the removed",
+              "`ever_challenged` gate (security findings H2/M1)."
+            ],
             "type": "bool"
           },
           {
-            "name": "evaluationInvalidated",
-            "type": "bool"
-          },
-          {
-            "name": "everChallenged",
-            "type": "bool"
-          },
-          {
-            "name": "openChallenges",
+            "name": "open_challenges",
+            "docs": [
+              "`open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of",
+              "unresolved `Challenge` accounts; checked_add/sub only."
+            ],
             "type": "u32"
           },
           {
-            "name": "challengeWindowEnd",
+            "name": "challenge_window_end",
+            "docs": [
+              "Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window",
+              "is defined only here so no earlier event can shorten it (security finding M1)."
+            ],
             "type": "i64"
           },
           {
-            "name": "claimWindowEnd",
+            "name": "claim_window_end",
             "type": "i64"
           },
           {
-            "name": "createdAt",
+            "name": "aborted",
+            "docs": [
+              "Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted",
+              "(pre-`Final` escape from the fund trap, security finding H1). No 8th status word."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
             "type": "i64"
           },
           {
@@ -673,43 +841,43 @@ export type Challenge = {
             "type": "u8"
           },
           {
-            "name": "vaultBump",
+            "name": "vault_bump",
             "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "experimentStatus",
+      "name": "ExperimentStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "draft"
+            "name": "Draft"
           },
           {
-            "name": "frozen"
+            "name": "Frozen"
           },
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "evaluating"
+            "name": "Evaluating"
           },
           {
-            "name": "challenged"
+            "name": "Challenged"
           },
           {
-            "name": "final"
+            "name": "Final"
           },
           {
-            "name": "closed"
+            "name": "Closed"
           }
         ]
       }
     },
     {
-      "name": "protocolConfig",
+      "name": "ProtocolConfig",
       "docs": [
         "Global config. Created once at program init."
       ],
@@ -721,7 +889,7 @@ export type Challenge = {
             "type": "pubkey"
           },
           {
-            "name": "feeBps",
+            "name": "fee_bps",
             "docs": [
               "Hard-zero fee (Invariant 7). Asserted == 0 at init."
             ],
@@ -742,23 +910,32 @@ export type Challenge = {
             "type": "u8"
           },
           {
-            "name": "schemaVersion",
+            "name": "schema_version",
             "type": "u16"
           },
           {
-            "name": "evidenceProgram",
+            "name": "evidence_program",
             "docs": [
               "Registered satellite program ids authorized to advance Experiment.status via CPI."
             ],
             "type": "pubkey"
           },
           {
-            "name": "settlementProgram",
+            "name": "settlement_program",
             "type": "pubkey"
           },
           {
-            "name": "challengeProgram",
+            "name": "challenge_program",
             "type": "pubkey"
+          },
+          {
+            "name": "abort_grace_seconds",
+            "docs": [
+              "Timeout offset (seconds) for the permissionless `abort_experiment` path",
+              "(state-machine v1.1 tx12): abort is permissionlessly reachable once",
+              "`now > evaluation_deadline + abort_grace_seconds`."
+            ],
+            "type": "i64"
           },
           {
             "name": "bump",

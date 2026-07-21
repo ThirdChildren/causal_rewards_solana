@@ -156,6 +156,17 @@ CARRIED DISCREPANCIES
 |   | ASCII (escaping, NFC, key order). Reconcile against      |                              | golden |              |
 |   | serialization.md §3/§4 before sim emits any cross-checked|                              | hash   |              |
 |   | golden hash.                                             |                              | (M3)   |              |
+| 3 | W1 (security re-review): permissionless-timeout          | solana-program-engineer      | M4     | TRACKED      |
+|   | abort_experiment can preempt a finalizable evaluation;   |                              | harden | (devnet-OK)  |
+|   | abort_grace_seconds not checked vs challenge_window_     |                              |        |              |
+|   | seconds. Fix: require grace>window at create AND/OR       |                              |        |              |
+|   | reject timeout-abort when evaluation_valid. Liveness,     |                              |        |              |
+|   | no theft; devnet-acceptable.                             |                              |        |              |
+| 4 | W2 (security re-review): dismissed-challenge bond forfeit | protocol-architect (sink spec)| M4    | TRACKED      |
+|   | to coordinator = coordinator/multisig collusion incentive| + solana-program-engineer    | harden | (devnet-OK,  |
+|   | (dismiss valid challenges, pocket bonds). Before real     |                              |        | disclosed in |
+|   | value: route forfeit to neutral sink (burn/treasury).    |                              |        | threat-model |
+|   | Devnet MVP: coordinator-forfeit accepted, DISCLOSED.     |                              |        | §3.4)        |
 
 ================================================================================
 INTERFACE / SERIALIZATION DECISIONS OTHER COMPONENTS DEPEND ON

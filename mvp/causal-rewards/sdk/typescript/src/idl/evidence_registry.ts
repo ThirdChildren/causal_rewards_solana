@@ -1,20 +1,20 @@
 /**
- * Program IDL in camelCase format in order to be used in JS/TS.
+ * Program IDL in Anchor 0.30.1 native format (snake_case), regenerated from
+ * the CURRENT published idl/evidence_registry.json. Pairs with new Program(<json>) at runtime.
  *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/evidence_registry.json`.
+ * Auto-generated: do not edit by hand. Re-copy from idl/ when the program changes.
  */
 export type EvidenceRegistry = {
   "address": "Ex82ncHsgc4ZFWDYQQzwR96GNNnKd3YmoULnjWgb1neP",
   "metadata": {
-    "name": "evidenceRegistry",
+    "name": "evidence_registry",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Causal Rewards Protocol — evidence registry (per-epoch batch roots, time ranges, signer commitments, aggregate counts)."
+    "description": "Causal Rewards Protocol \u2014 evidence registry (per-epoch batch roots, time ranges, signer commitments, aggregate counts)."
   },
   "instructions": [
     {
-      "name": "postEvidenceEpoch",
+      "name": "post_evidence_epoch",
       "discriminator": [
         113,
         175,
@@ -30,7 +30,7 @@ export type EvidenceRegistry = {
           "name": "experiment"
         },
         {
-          "name": "evidenceEpoch",
+          "name": "evidence_epoch",
           "writable": true,
           "pda": {
             "seeds": [
@@ -50,13 +50,13 @@ export type EvidenceRegistry = {
               },
               {
                 "kind": "arg",
-                "path": "epochIndex"
+                "path": "epoch_index"
               }
             ]
           }
         },
         {
-          "name": "prevEpoch"
+          "name": "prev_epoch"
         },
         {
           "name": "coordinator",
@@ -64,20 +64,20 @@ export type EvidenceRegistry = {
           "signer": true
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "epochIndex",
+          "name": "epoch_index",
           "type": "u64"
         },
         {
           "name": "args",
           "type": {
             "defined": {
-              "name": "evidenceEpochArgs"
+              "name": "EvidenceEpochArgs"
             }
           }
         }
@@ -86,7 +86,7 @@ export type EvidenceRegistry = {
   ],
   "accounts": [
     {
-      "name": "evidenceEpoch",
+      "name": "EvidenceEpoch",
       "discriminator": [
         136,
         24,
@@ -101,7 +101,7 @@ export type EvidenceRegistry = {
   ],
   "events": [
     {
-      "name": "evidenceEpochPosted",
+      "name": "EvidenceEpochPosted",
       "discriminator": [
         137,
         87,
@@ -117,48 +117,48 @@ export type EvidenceRegistry = {
   "errors": [
     {
       "code": 6000,
-      "name": "wrongStatus",
+      "name": "WrongStatus",
       "msg": "Experiment is not Active"
     },
     {
       "code": 6001,
-      "name": "unauthorized",
+      "name": "Unauthorized",
       "msg": "Signer is not the coordinator"
     },
     {
       "code": 6002,
-      "name": "invalidCohortId",
+      "name": "InvalidCohortId",
       "msg": "cohort_id empty or too long"
     },
     {
       "code": 6003,
-      "name": "invalidTimeRange",
+      "name": "InvalidTimeRange",
       "msg": "time_range invalid: require start < end"
     },
     {
       "code": 6004,
-      "name": "timeRangeOutsideActiveWindow",
+      "name": "TimeRangeOutsideActiveWindow",
       "msg": "time_range outside the active window"
     },
     {
       "code": 6005,
-      "name": "inconsistentCounts",
+      "name": "InconsistentCounts",
       "msg": "distinct_signers exceeds total observation count"
     },
     {
       "code": 6006,
-      "name": "prevEpochMissing",
+      "name": "PrevEpochMissing",
       "msg": "previous epoch does not exist (epochs must be monotonic, no gaps)"
     },
     {
       "code": 6007,
-      "name": "mathOverflow",
+      "name": "MathOverflow",
       "msg": "Checked arithmetic overflow"
     }
   ],
   "types": [
     {
-      "name": "evidenceEpoch",
+      "name": "EvidenceEpoch",
       "type": {
         "kind": "struct",
         "fields": [
@@ -167,23 +167,23 @@ export type EvidenceRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "epochIndex",
+            "name": "epoch_index",
             "type": "u64"
           },
           {
-            "name": "cohortId",
+            "name": "cohort_id",
             "type": "string"
           },
           {
-            "name": "timeStart",
+            "name": "time_start",
             "type": "i64"
           },
           {
-            "name": "timeEnd",
+            "name": "time_end",
             "type": "i64"
           },
           {
-            "name": "signerSetRoot",
+            "name": "signer_set_root",
             "type": {
               "array": [
                 "u8",
@@ -192,7 +192,7 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "observationsRoot",
+            "name": "observations_root",
             "type": {
               "array": [
                 "u8",
@@ -201,19 +201,19 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "acceptedCount",
+            "name": "accepted_count",
             "type": "u64"
           },
           {
-            "name": "rejectedCount",
+            "name": "rejected_count",
             "type": "u64"
           },
           {
-            "name": "distinctSigners",
+            "name": "distinct_signers",
             "type": "u64"
           },
           {
-            "name": "contentHash",
+            "name": "content_hash",
             "type": {
               "array": [
                 "u8",
@@ -233,24 +233,24 @@ export type EvidenceRegistry = {
       }
     },
     {
-      "name": "evidenceEpochArgs",
+      "name": "EvidenceEpochArgs",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "cohortId",
+            "name": "cohort_id",
             "type": "string"
           },
           {
-            "name": "timeStart",
+            "name": "time_start",
             "type": "i64"
           },
           {
-            "name": "timeEnd",
+            "name": "time_end",
             "type": "i64"
           },
           {
-            "name": "signerSetRoot",
+            "name": "signer_set_root",
             "type": {
               "array": [
                 "u8",
@@ -259,7 +259,7 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "observationsRoot",
+            "name": "observations_root",
             "type": {
               "array": [
                 "u8",
@@ -268,19 +268,19 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "acceptedCount",
+            "name": "accepted_count",
             "type": "u64"
           },
           {
-            "name": "rejectedCount",
+            "name": "rejected_count",
             "type": "u64"
           },
           {
-            "name": "distinctSigners",
+            "name": "distinct_signers",
             "type": "u64"
           },
           {
-            "name": "contentHash",
+            "name": "content_hash",
             "type": {
               "array": [
                 "u8",
@@ -296,7 +296,7 @@ export type EvidenceRegistry = {
       }
     },
     {
-      "name": "evidenceEpochPosted",
+      "name": "EvidenceEpochPosted",
       "type": {
         "kind": "struct",
         "fields": [
@@ -305,23 +305,23 @@ export type EvidenceRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "epochIndex",
+            "name": "epoch_index",
             "type": "u64"
           },
           {
-            "name": "cohortId",
+            "name": "cohort_id",
             "type": "string"
           },
           {
-            "name": "timeStart",
+            "name": "time_start",
             "type": "i64"
           },
           {
-            "name": "timeEnd",
+            "name": "time_end",
             "type": "i64"
           },
           {
-            "name": "signerSetRoot",
+            "name": "signer_set_root",
             "type": {
               "array": [
                 "u8",
@@ -330,7 +330,7 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "observationsRoot",
+            "name": "observations_root",
             "type": {
               "array": [
                 "u8",
@@ -339,14 +339,14 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "acceptedCount",
+            "name": "accepted_count",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "experiment",
+      "name": "Experiment",
       "docs": [
         "Per-experiment record. Holds only hashes / roots / status / windows (Invariant 5)."
       ],
@@ -357,7 +357,7 @@ export type EvidenceRegistry = {
             "name": "status",
             "type": {
               "defined": {
-                "name": "experimentStatus"
+                "name": "ExperimentStatus"
               }
             }
           },
@@ -370,24 +370,24 @@ export type EvidenceRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "authorityThreshold",
+            "name": "authority_threshold",
             "docs": [
               "m-of-n multisig."
             ],
             "type": "u8"
           },
           {
-            "name": "authoritySigners",
+            "name": "authority_signers",
             "type": {
               "vec": "pubkey"
             }
           },
           {
-            "name": "experimentId",
+            "name": "experiment_id",
             "type": "string"
           },
           {
-            "name": "manifestHash",
+            "name": "manifest_hash",
             "type": {
               "array": [
                 "u8",
@@ -396,7 +396,7 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "analysisContainerDigest",
+            "name": "analysis_container_digest",
             "type": {
               "array": [
                 "u8",
@@ -405,7 +405,7 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "rewardCurveHash",
+            "name": "reward_curve_hash",
             "type": {
               "array": [
                 "u8",
@@ -414,7 +414,7 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "seedCommitment",
+            "name": "seed_commitment",
             "type": {
               "array": [
                 "u8",
@@ -431,43 +431,43 @@ export type EvidenceRegistry = {
             "type": "pubkey"
           },
           {
-            "name": "budgetBaseUnits",
+            "name": "budget_base_units",
             "type": "u64"
           },
           {
-            "name": "challengeBondBaseUnits",
+            "name": "challenge_bond_base_units",
             "type": "u64"
           },
           {
-            "name": "freezeBy",
+            "name": "freeze_by",
             "type": "i64"
           },
           {
-            "name": "activeStart",
+            "name": "active_start",
             "type": "i64"
           },
           {
-            "name": "activeEnd",
+            "name": "active_end",
             "type": "i64"
           },
           {
-            "name": "evaluationDeadline",
+            "name": "evaluation_deadline",
             "type": "i64"
           },
           {
-            "name": "challengeWindowSeconds",
+            "name": "challenge_window_seconds",
             "type": "i64"
           },
           {
-            "name": "claimWindowSeconds",
+            "name": "claim_window_seconds",
             "type": "i64"
           },
           {
-            "name": "cohortPublished",
+            "name": "cohort_published",
             "type": "bool"
           },
           {
-            "name": "revealedSeed",
+            "name": "revealed_seed",
             "docs": [
               "Revealed once, after publish_cohort_root (freeze-before-reveal, Invariant 1)."
             ],
@@ -481,31 +481,47 @@ export type EvidenceRegistry = {
             }
           },
           {
-            "name": "evaluationPresent",
+            "name": "evaluation_valid",
+            "docs": [
+              "True iff a live, non-invalidated `Evaluation` is present (set at",
+              "`submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).",
+              "It is the sole `evaluation is finalizable` predicate (state-machine v1.1);",
+              "starts `false` at create (no evaluation yet). Replaces the previous",
+              "`evaluation_present`/`evaluation_invalidated` pair and the removed",
+              "`ever_challenged` gate (security findings H2/M1)."
+            ],
             "type": "bool"
           },
           {
-            "name": "evaluationInvalidated",
-            "type": "bool"
-          },
-          {
-            "name": "everChallenged",
-            "type": "bool"
-          },
-          {
-            "name": "openChallenges",
+            "name": "open_challenges",
+            "docs": [
+              "`open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of",
+              "unresolved `Challenge` accounts; checked_add/sub only."
+            ],
             "type": "u32"
           },
           {
-            "name": "challengeWindowEnd",
+            "name": "challenge_window_end",
+            "docs": [
+              "Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window",
+              "is defined only here so no earlier event can shorten it (security finding M1)."
+            ],
             "type": "i64"
           },
           {
-            "name": "claimWindowEnd",
+            "name": "claim_window_end",
             "type": "i64"
           },
           {
-            "name": "createdAt",
+            "name": "aborted",
+            "docs": [
+              "Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted",
+              "(pre-`Final` escape from the fund trap, security finding H1). No 8th status word."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
             "type": "i64"
           },
           {
@@ -513,37 +529,37 @@ export type EvidenceRegistry = {
             "type": "u8"
           },
           {
-            "name": "vaultBump",
+            "name": "vault_bump",
             "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "experimentStatus",
+      "name": "ExperimentStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "draft"
+            "name": "Draft"
           },
           {
-            "name": "frozen"
+            "name": "Frozen"
           },
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "evaluating"
+            "name": "Evaluating"
           },
           {
-            "name": "challenged"
+            "name": "Challenged"
           },
           {
-            "name": "final"
+            "name": "Final"
           },
           {
-            "name": "closed"
+            "name": "Closed"
           }
         ]
       }

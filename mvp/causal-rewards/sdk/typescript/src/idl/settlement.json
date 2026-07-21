@@ -8,6 +8,181 @@
   },
   "instructions": [
     {
+      "name": "abort_experiment",
+      "docs": [
+        "tx12 (state-machine v1.1, security finding H1): the bounded escape from the",
+        "pre-`Final` fund trap. Returns the FULL experiment vault to `experiment.coordinator`",
+        "and drives the experiment to `Closed` with `aborted = true` (via registry CPI).",
+        "",
+        "Reachable from any pre-`Final` state (`Frozen`/`Active`/`Evaluating`/`Challenged`),",
+        "gated by EITHER a multisig threshold (signers in `remaining_accounts`) OR a",
+        "permissionless timeout `now > evaluation_deadline + abort_grace_seconds`. It is",
+        "structurally impossible after any claim (a `ClaimReceipt` only exists from `Final`,",
+        "which abort cannot reach); the `Distribution`-does-not-exist assertion below makes",
+        "that fact locally checkable rather than relying on reachability alone.",
+        "",
+        "Still-open `Challenge` bonds are escrowed under the CHALLENGE program's PDA authority",
+        "and cannot be moved from here; they are refunded to their challengers permissionlessly",
+        "via `challenge::refund_bond`, which is unlocked once `experiment.aborted == true`."
+      ],
+      "discriminator": [
+        211,
+        81,
+        35,
+        18,
+        250,
+        26,
+        92,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "experiment_registry_program"
+            }
+          }
+        },
+        {
+          "name": "experiment",
+          "writable": true
+        },
+        {
+          "name": "distribution",
+          "docs": [
+            "only legal before any Distribution/ClaimReceipt exists."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "experiment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "experiment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recovery_token",
+          "writable": true
+        },
+        {
+          "name": "cpi_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  112,
+                  105,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "experiment_registry_program",
+          "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim_reward",
       "discriminator": [
         149,
@@ -682,6 +857,19 @@
       ]
     },
     {
+      "name": "ExperimentAborted",
+      "discriminator": [
+        191,
+        142,
+        47,
+        239,
+        108,
+        171,
+        159,
+        5
+      ]
+    },
+    {
       "name": "ExperimentClosed",
       "discriminator": [
         39,
@@ -788,6 +976,16 @@
       "code": 6015,
       "name": "MathOverflow",
       "msg": "Checked arithmetic overflow"
+    },
+    {
+      "code": 6016,
+      "name": "DistributionExists",
+      "msg": "A Distribution already exists; abort is only legal before finalize"
+    },
+    {
+      "code": 6017,
+      "name": "AbortNotAuthorized",
+      "msg": "abort_experiment not authorized: multisig threshold not met and timeout not elapsed"
     }
   ],
   "types": [
@@ -1133,28 +1331,44 @@
             }
           },
           {
-            "name": "evaluation_present",
-            "type": "bool"
-          },
-          {
-            "name": "evaluation_invalidated",
-            "type": "bool"
-          },
-          {
-            "name": "ever_challenged",
+            "name": "evaluation_valid",
+            "docs": [
+              "True iff a live, non-invalidated `Evaluation` is present (set at",
+              "`submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).",
+              "It is the sole `evaluation is finalizable` predicate (state-machine v1.1);",
+              "starts `false` at create (no evaluation yet). Replaces the previous",
+              "`evaluation_present`/`evaluation_invalidated` pair and the removed",
+              "`ever_challenged` gate (security findings H2/M1)."
+            ],
             "type": "bool"
           },
           {
             "name": "open_challenges",
+            "docs": [
+              "`open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of",
+              "unresolved `Challenge` accounts; checked_add/sub only."
+            ],
             "type": "u32"
           },
           {
             "name": "challenge_window_end",
+            "docs": [
+              "Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window",
+              "is defined only here so no earlier event can shorten it (security finding M1)."
+            ],
             "type": "i64"
           },
           {
             "name": "claim_window_end",
             "type": "i64"
+          },
+          {
+            "name": "aborted",
+            "docs": [
+              "Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted",
+              "(pre-`Final` escape from the fund trap, security finding H1). No 8th status word."
+            ],
+            "type": "bool"
           },
           {
             "name": "created_at",
@@ -1167,6 +1381,29 @@
           {
             "name": "vault_bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExperimentAborted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "experiment",
+            "type": "pubkey"
+          },
+          {
+            "name": "recovered_base_units",
+            "type": "u64"
+          },
+          {
+            "name": "permissionless",
+            "docs": [
+              "true if taken via the permissionless timeout path, false if via multisig."
+            ],
+            "type": "bool"
           }
         ]
       }
@@ -1267,6 +1504,15 @@
           {
             "name": "challenge_program",
             "type": "pubkey"
+          },
+          {
+            "name": "abort_grace_seconds",
+            "docs": [
+              "Timeout offset (seconds) for the permissionless `abort_experiment` path",
+              "(state-machine v1.1 tx12): abort is permissionlessly reachable once",
+              "`now > evaluation_deadline + abort_grace_seconds`."
+            ],
+            "type": "i64"
           },
           {
             "name": "bump",

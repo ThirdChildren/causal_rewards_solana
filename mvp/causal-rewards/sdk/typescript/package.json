@@ -1,0 +1,39 @@
+{
+  "name": "@causal-rewards/sdk",
+  "version": "0.1.0",
+  "description": "Typed TypeScript SDK for the Causal Rewards Protocol Solana programs (experiment registry, evidence, settlement, challenge). Thin, deterministic, IDL-aligned.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "ts-mocha -p tsconfig.json 'test/**/*.test.ts'",
+    "example": "ts-node examples/lifecycle.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@noble/hashes": "^1.4.0",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.0.0",
+    "chai": "^4.3.4",
+    "mocha": "^10.4.0",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

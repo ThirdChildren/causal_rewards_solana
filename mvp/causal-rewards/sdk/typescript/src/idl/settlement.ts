@@ -1,8 +1,8 @@
 /**
- * Program IDL in camelCase format in order to be used in JS/TS.
+ * Program IDL in Anchor 0.30.1 native format (snake_case), regenerated from
+ * the CURRENT published idl/settlement.json. Pairs with new Program(<json>) at runtime.
  *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/settlement.json`.
+ * Auto-generated: do not edit by hand. Re-copy from idl/ when the program changes.
  */
 export type Settlement = {
   "address": "4YGzmSUZYxYQMJ4E9YiM7h8dv4KChVEKHuN5T2W5qn86",
@@ -10,11 +10,186 @@ export type Settlement = {
     "name": "settlement",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Causal Rewards Protocol — settlement (evaluation, finalized reward root, single-use Merkle claims, unused-budget recovery). Fees hard-zero."
+    "description": "Causal Rewards Protocol \u2014 settlement (evaluation, finalized reward root, single-use Merkle claims, unused-budget recovery). Fees hard-zero."
   },
   "instructions": [
     {
-      "name": "claimReward",
+      "name": "abort_experiment",
+      "docs": [
+        "tx12 (state-machine v1.1, security finding H1): the bounded escape from the",
+        "pre-`Final` fund trap. Returns the FULL experiment vault to `experiment.coordinator`",
+        "and drives the experiment to `Closed` with `aborted = true` (via registry CPI).",
+        "",
+        "Reachable from any pre-`Final` state (`Frozen`/`Active`/`Evaluating`/`Challenged`),",
+        "gated by EITHER a multisig threshold (signers in `remaining_accounts`) OR a",
+        "permissionless timeout `now > evaluation_deadline + abort_grace_seconds`. It is",
+        "structurally impossible after any claim (a `ClaimReceipt` only exists from `Final`,",
+        "which abort cannot reach); the `Distribution`-does-not-exist assertion below makes",
+        "that fact locally checkable rather than relying on reachability alone.",
+        "",
+        "Still-open `Challenge` bonds are escrowed under the CHALLENGE program's PDA authority",
+        "and cannot be moved from here; they are refunded to their challengers permissionlessly",
+        "via `challenge::refund_bond`, which is unlocked once `experiment.aborted == true`."
+      ],
+      "discriminator": [
+        211,
+        81,
+        35,
+        18,
+        250,
+        26,
+        92,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "experiment_registry_program"
+            }
+          }
+        },
+        {
+          "name": "experiment",
+          "writable": true
+        },
+        {
+          "name": "distribution",
+          "docs": [
+            "only legal before any Distribution/ClaimReceipt exists."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "experiment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "experiment"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recovery_token",
+          "writable": true
+        },
+        {
+          "name": "cpi_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  112,
+                  105,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "experiment_registry_program",
+          "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_reward",
       "discriminator": [
         149,
         95,
@@ -61,7 +236,7 @@ export type Settlement = {
           }
         },
         {
-          "name": "claimReceipt",
+          "name": "claim_receipt",
           "writable": true,
           "pda": {
             "seeds": [
@@ -81,7 +256,7 @@ export type Settlement = {
               },
               {
                 "kind": "arg",
-                "path": "leafIndex"
+                "path": "leaf_index"
               }
             ]
           }
@@ -91,7 +266,7 @@ export type Settlement = {
           "writable": true
         },
         {
-          "name": "vaultAuthority",
+          "name": "vault_authority",
           "pda": {
             "seeds": [
               {
@@ -122,7 +297,7 @@ export type Settlement = {
           }
         },
         {
-          "name": "recipientToken",
+          "name": "recipient_token",
           "writable": true
         },
         {
@@ -131,21 +306,21 @@ export type Settlement = {
           "signer": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "leafIndex",
+          "name": "leaf_index",
           "type": "u64"
         },
         {
-          "name": "amountBaseUnits",
+          "name": "amount_base_units",
           "type": "u64"
         },
         {
@@ -153,7 +328,7 @@ export type Settlement = {
           "type": {
             "vec": {
               "defined": {
-                "name": "claimProofStep"
+                "name": "ClaimProofStep"
               }
             }
           }
@@ -161,7 +336,7 @@ export type Settlement = {
       ]
     },
     {
-      "name": "closeExperiment",
+      "name": "close_experiment",
       "discriminator": [
         147,
         221,
@@ -174,7 +349,7 @@ export type Settlement = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -200,7 +375,7 @@ export type Settlement = {
             ],
             "program": {
               "kind": "account",
-              "path": "experimentRegistryProgram"
+              "path": "experiment_registry_program"
             }
           }
         },
@@ -244,7 +419,7 @@ export type Settlement = {
           "writable": true
         },
         {
-          "name": "vaultAuthority",
+          "name": "vault_authority",
           "pda": {
             "seeds": [
               {
@@ -275,11 +450,11 @@ export type Settlement = {
           }
         },
         {
-          "name": "recoveryToken",
+          "name": "recovery_token",
           "writable": true
         },
         {
-          "name": "cpiAuthority",
+          "name": "cpi_authority",
           "pda": {
             "seeds": [
               {
@@ -309,18 +484,18 @@ export type Settlement = {
           "signer": true
         },
         {
-          "name": "experimentRegistryProgram",
+          "name": "experiment_registry_program",
           "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
     },
     {
-      "name": "finalizeDistribution",
+      "name": "finalize_distribution",
       "discriminator": [
         12,
         246,
@@ -333,7 +508,7 @@ export type Settlement = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -359,7 +534,7 @@ export type Settlement = {
             ],
             "program": {
               "kind": "account",
-              "path": "experimentRegistryProgram"
+              "path": "experiment_registry_program"
             }
           }
         },
@@ -426,7 +601,7 @@ export type Settlement = {
           }
         },
         {
-          "name": "cpiAuthority",
+          "name": "cpi_authority",
           "pda": {
             "seeds": [
               {
@@ -456,23 +631,23 @@ export type Settlement = {
           "signer": true
         },
         {
-          "name": "experimentRegistryProgram",
+          "name": "experiment_registry_program",
           "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "totalAllocatedBaseUnits",
+          "name": "total_allocated_base_units",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "submitEvaluation",
+      "name": "submit_evaluation",
       "discriminator": [
         216,
         88,
@@ -485,7 +660,7 @@ export type Settlement = {
       ],
       "accounts": [
         {
-          "name": "protocolConfig",
+          "name": "protocol_config",
           "pda": {
             "seeds": [
               {
@@ -511,7 +686,7 @@ export type Settlement = {
             ],
             "program": {
               "kind": "account",
-              "path": "experimentRegistryProgram"
+              "path": "experiment_registry_program"
             }
           }
         },
@@ -547,10 +722,10 @@ export type Settlement = {
           }
         },
         {
-          "name": "epochZero"
+          "name": "epoch_zero"
         },
         {
-          "name": "cpiAuthority",
+          "name": "cpi_authority",
           "pda": {
             "seeds": [
               {
@@ -580,17 +755,17 @@ export type Settlement = {
           "signer": true
         },
         {
-          "name": "experimentRegistryProgram",
+          "name": "experiment_registry_program",
           "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "resultArtifactHash",
+          "name": "result_artifact_hash",
           "type": {
             "array": [
               "u8",
@@ -599,7 +774,7 @@ export type Settlement = {
           }
         },
         {
-          "name": "rewardRoot",
+          "name": "reward_root",
           "type": {
             "array": [
               "u8",
@@ -608,7 +783,7 @@ export type Settlement = {
           }
         },
         {
-          "name": "analysisContainerDigest",
+          "name": "analysis_container_digest",
           "type": {
             "array": [
               "u8",
@@ -621,7 +796,7 @@ export type Settlement = {
   ],
   "accounts": [
     {
-      "name": "claimReceipt",
+      "name": "ClaimReceipt",
       "discriminator": [
         223,
         233,
@@ -634,7 +809,7 @@ export type Settlement = {
       ]
     },
     {
-      "name": "distribution",
+      "name": "Distribution",
       "discriminator": [
         176,
         85,
@@ -647,7 +822,7 @@ export type Settlement = {
       ]
     },
     {
-      "name": "evaluation",
+      "name": "Evaluation",
       "discriminator": [
         212,
         70,
@@ -662,7 +837,7 @@ export type Settlement = {
   ],
   "events": [
     {
-      "name": "distributionFinalized",
+      "name": "DistributionFinalized",
       "discriminator": [
         232,
         198,
@@ -675,7 +850,7 @@ export type Settlement = {
       ]
     },
     {
-      "name": "evaluationSubmitted",
+      "name": "EvaluationSubmitted",
       "discriminator": [
         255,
         99,
@@ -688,7 +863,20 @@ export type Settlement = {
       ]
     },
     {
-      "name": "experimentClosed",
+      "name": "ExperimentAborted",
+      "discriminator": [
+        191,
+        142,
+        47,
+        239,
+        108,
+        171,
+        159,
+        5
+      ]
+    },
+    {
+      "name": "ExperimentClosed",
       "discriminator": [
         39,
         4,
@@ -701,7 +889,7 @@ export type Settlement = {
       ]
     },
     {
-      "name": "rewardClaimed",
+      "name": "RewardClaimed",
       "discriminator": [
         49,
         28,
@@ -717,88 +905,98 @@ export type Settlement = {
   "errors": [
     {
       "code": 6000,
-      "name": "wrongStatus",
+      "name": "WrongStatus",
       "msg": "Experiment is not in the required status"
     },
     {
       "code": 6001,
-      "name": "unauthorized",
+      "name": "Unauthorized",
       "msg": "Signer not authorized"
     },
     {
       "code": 6002,
-      "name": "seedNotRevealed",
+      "name": "SeedNotRevealed",
       "msg": "Seed has not been revealed"
     },
     {
       "code": 6003,
-      "name": "activeWindowNotEnded",
+      "name": "ActiveWindowNotEnded",
       "msg": "Active window has not ended"
     },
     {
       "code": 6004,
-      "name": "evaluationDeadlinePassed",
+      "name": "EvaluationDeadlinePassed",
       "msg": "Evaluation deadline has passed"
     },
     {
       "code": 6005,
-      "name": "containerDigestMismatch",
+      "name": "ContainerDigestMismatch",
       "msg": "Echoed analysis_container_digest does not match the frozen one"
     },
     {
       "code": 6006,
-      "name": "noEvidence",
+      "name": "NoEvidence",
       "msg": "No evidence epoch exists"
     },
     {
       "code": 6007,
-      "name": "multisigThresholdNotMet",
+      "name": "MultisigThresholdNotMet",
       "msg": "Multisig threshold not met"
     },
     {
       "code": 6008,
-      "name": "allocationExceedsBudget",
+      "name": "AllocationExceedsBudget",
       "msg": "Allocation exceeds budget"
     },
     {
       "code": 6009,
-      "name": "invalidMerkleProof",
+      "name": "InvalidMerkleProof",
       "msg": "Merkle proof of the reward leaf is invalid"
     },
     {
       "code": 6010,
-      "name": "claimWindowClosed",
+      "name": "ClaimWindowClosed",
       "msg": "Claim window is closed"
     },
     {
       "code": 6011,
-      "name": "claimWindowNotElapsed",
+      "name": "ClaimWindowNotElapsed",
       "msg": "Claim window has not elapsed"
     },
     {
       "code": 6012,
-      "name": "wrongVault",
+      "name": "WrongVault",
       "msg": "Vault does not match experiment"
     },
     {
       "code": 6013,
-      "name": "wrongExperiment",
+      "name": "WrongExperiment",
       "msg": "Evaluation/Distribution does not belong to this experiment"
     },
     {
       "code": 6014,
-      "name": "mintMismatch",
+      "name": "MintMismatch",
       "msg": "Token mint mismatch"
     },
     {
       "code": 6015,
-      "name": "mathOverflow",
+      "name": "MathOverflow",
       "msg": "Checked arithmetic overflow"
+    },
+    {
+      "code": 6016,
+      "name": "DistributionExists",
+      "msg": "A Distribution already exists; abort is only legal before finalize"
+    },
+    {
+      "code": 6017,
+      "name": "AbortNotAuthorized",
+      "msg": "abort_experiment not authorized: multisig threshold not met and timeout not elapsed"
     }
   ],
   "types": [
     {
-      "name": "claimProofStep",
+      "name": "ClaimProofStep",
       "type": {
         "kind": "struct",
         "fields": [
@@ -812,7 +1010,7 @@ export type Settlement = {
             }
           },
           {
-            "name": "siblingIsLeft",
+            "name": "sibling_is_left",
             "docs": [
               "true => sibling is the LEFT node (self is the right child)."
             ],
@@ -822,7 +1020,7 @@ export type Settlement = {
       }
     },
     {
-      "name": "claimReceipt",
+      "name": "ClaimReceipt",
       "docs": [
         "Single-use nullifier for one reward leaf."
       ],
@@ -834,7 +1032,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "leafIndex",
+            "name": "leaf_index",
             "type": "u64"
           },
           {
@@ -842,7 +1040,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "amountBaseUnits",
+            "name": "amount_base_units",
             "type": "u64"
           },
           {
@@ -853,7 +1051,7 @@ export type Settlement = {
       }
     },
     {
-      "name": "distribution",
+      "name": "Distribution",
       "type": {
         "kind": "struct",
         "fields": [
@@ -862,7 +1060,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "rewardRoot",
+            "name": "reward_root",
             "type": {
               "array": [
                 "u8",
@@ -871,15 +1069,15 @@ export type Settlement = {
             }
           },
           {
-            "name": "totalAllocatedBaseUnits",
+            "name": "total_allocated_base_units",
             "type": "u64"
           },
           {
-            "name": "unallocatedBaseUnits",
+            "name": "unallocated_base_units",
             "type": "u64"
           },
           {
-            "name": "claimWindowEnd",
+            "name": "claim_window_end",
             "type": "i64"
           },
           {
@@ -890,7 +1088,7 @@ export type Settlement = {
       }
     },
     {
-      "name": "distributionFinalized",
+      "name": "DistributionFinalized",
       "type": {
         "kind": "struct",
         "fields": [
@@ -899,7 +1097,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "rewardRoot",
+            "name": "reward_root",
             "type": {
               "array": [
                 "u8",
@@ -908,22 +1106,22 @@ export type Settlement = {
             }
           },
           {
-            "name": "totalAllocatedBaseUnits",
+            "name": "total_allocated_base_units",
             "type": "u64"
           },
           {
-            "name": "unallocatedBaseUnits",
+            "name": "unallocated_base_units",
             "type": "u64"
           },
           {
-            "name": "claimWindowEnd",
+            "name": "claim_window_end",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "evaluation",
+      "name": "Evaluation",
       "type": {
         "kind": "struct",
         "fields": [
@@ -932,7 +1130,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "resultArtifactHash",
+            "name": "result_artifact_hash",
             "type": {
               "array": [
                 "u8",
@@ -941,7 +1139,7 @@ export type Settlement = {
             }
           },
           {
-            "name": "rewardRoot",
+            "name": "reward_root",
             "type": {
               "array": [
                 "u8",
@@ -950,7 +1148,7 @@ export type Settlement = {
             }
           },
           {
-            "name": "analysisContainerDigest",
+            "name": "analysis_container_digest",
             "type": {
               "array": [
                 "u8",
@@ -970,7 +1168,7 @@ export type Settlement = {
       }
     },
     {
-      "name": "evaluationSubmitted",
+      "name": "EvaluationSubmitted",
       "type": {
         "kind": "struct",
         "fields": [
@@ -979,7 +1177,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "resultArtifactHash",
+            "name": "result_artifact_hash",
             "type": {
               "array": [
                 "u8",
@@ -988,7 +1186,7 @@ export type Settlement = {
             }
           },
           {
-            "name": "rewardRoot",
+            "name": "reward_root",
             "type": {
               "array": [
                 "u8",
@@ -997,14 +1195,14 @@ export type Settlement = {
             }
           },
           {
-            "name": "challengeWindowEnd",
+            "name": "challenge_window_end",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "experiment",
+      "name": "Experiment",
       "docs": [
         "Per-experiment record. Holds only hashes / roots / status / windows (Invariant 5)."
       ],
@@ -1015,7 +1213,7 @@ export type Settlement = {
             "name": "status",
             "type": {
               "defined": {
-                "name": "experimentStatus"
+                "name": "ExperimentStatus"
               }
             }
           },
@@ -1028,24 +1226,24 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "authorityThreshold",
+            "name": "authority_threshold",
             "docs": [
               "m-of-n multisig."
             ],
             "type": "u8"
           },
           {
-            "name": "authoritySigners",
+            "name": "authority_signers",
             "type": {
               "vec": "pubkey"
             }
           },
           {
-            "name": "experimentId",
+            "name": "experiment_id",
             "type": "string"
           },
           {
-            "name": "manifestHash",
+            "name": "manifest_hash",
             "type": {
               "array": [
                 "u8",
@@ -1054,7 +1252,7 @@ export type Settlement = {
             }
           },
           {
-            "name": "analysisContainerDigest",
+            "name": "analysis_container_digest",
             "type": {
               "array": [
                 "u8",
@@ -1063,7 +1261,7 @@ export type Settlement = {
             }
           },
           {
-            "name": "rewardCurveHash",
+            "name": "reward_curve_hash",
             "type": {
               "array": [
                 "u8",
@@ -1072,7 +1270,7 @@ export type Settlement = {
             }
           },
           {
-            "name": "seedCommitment",
+            "name": "seed_commitment",
             "type": {
               "array": [
                 "u8",
@@ -1089,43 +1287,43 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "budgetBaseUnits",
+            "name": "budget_base_units",
             "type": "u64"
           },
           {
-            "name": "challengeBondBaseUnits",
+            "name": "challenge_bond_base_units",
             "type": "u64"
           },
           {
-            "name": "freezeBy",
+            "name": "freeze_by",
             "type": "i64"
           },
           {
-            "name": "activeStart",
+            "name": "active_start",
             "type": "i64"
           },
           {
-            "name": "activeEnd",
+            "name": "active_end",
             "type": "i64"
           },
           {
-            "name": "evaluationDeadline",
+            "name": "evaluation_deadline",
             "type": "i64"
           },
           {
-            "name": "challengeWindowSeconds",
+            "name": "challenge_window_seconds",
             "type": "i64"
           },
           {
-            "name": "claimWindowSeconds",
+            "name": "claim_window_seconds",
             "type": "i64"
           },
           {
-            "name": "cohortPublished",
+            "name": "cohort_published",
             "type": "bool"
           },
           {
-            "name": "revealedSeed",
+            "name": "revealed_seed",
             "docs": [
               "Revealed once, after publish_cohort_root (freeze-before-reveal, Invariant 1)."
             ],
@@ -1139,31 +1337,47 @@ export type Settlement = {
             }
           },
           {
-            "name": "evaluationPresent",
+            "name": "evaluation_valid",
+            "docs": [
+              "True iff a live, non-invalidated `Evaluation` is present (set at",
+              "`submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).",
+              "It is the sole `evaluation is finalizable` predicate (state-machine v1.1);",
+              "starts `false` at create (no evaluation yet). Replaces the previous",
+              "`evaluation_present`/`evaluation_invalidated` pair and the removed",
+              "`ever_challenged` gate (security findings H2/M1)."
+            ],
             "type": "bool"
           },
           {
-            "name": "evaluationInvalidated",
-            "type": "bool"
-          },
-          {
-            "name": "everChallenged",
-            "type": "bool"
-          },
-          {
-            "name": "openChallenges",
+            "name": "open_challenges",
+            "docs": [
+              "`open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of",
+              "unresolved `Challenge` accounts; checked_add/sub only."
+            ],
             "type": "u32"
           },
           {
-            "name": "challengeWindowEnd",
+            "name": "challenge_window_end",
+            "docs": [
+              "Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window",
+              "is defined only here so no earlier event can shorten it (security finding M1)."
+            ],
             "type": "i64"
           },
           {
-            "name": "claimWindowEnd",
+            "name": "claim_window_end",
             "type": "i64"
           },
           {
-            "name": "createdAt",
+            "name": "aborted",
+            "docs": [
+              "Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted",
+              "(pre-`Final` escape from the fund trap, security finding H1). No 8th status word."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
             "type": "i64"
           },
           {
@@ -1171,14 +1385,14 @@ export type Settlement = {
             "type": "u8"
           },
           {
-            "name": "vaultBump",
+            "name": "vault_bump",
             "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "experimentClosed",
+      "name": "ExperimentAborted",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1187,43 +1401,66 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "recoveredBaseUnits",
+            "name": "recovered_base_units",
+            "type": "u64"
+          },
+          {
+            "name": "permissionless",
+            "docs": [
+              "true if taken via the permissionless timeout path, false if via multisig."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExperimentClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "experiment",
+            "type": "pubkey"
+          },
+          {
+            "name": "recovered_base_units",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "experimentStatus",
+      "name": "ExperimentStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "draft"
+            "name": "Draft"
           },
           {
-            "name": "frozen"
+            "name": "Frozen"
           },
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "evaluating"
+            "name": "Evaluating"
           },
           {
-            "name": "challenged"
+            "name": "Challenged"
           },
           {
-            "name": "final"
+            "name": "Final"
           },
           {
-            "name": "closed"
+            "name": "Closed"
           }
         ]
       }
     },
     {
-      "name": "protocolConfig",
+      "name": "ProtocolConfig",
       "docs": [
         "Global config. Created once at program init."
       ],
@@ -1235,7 +1472,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "feeBps",
+            "name": "fee_bps",
             "docs": [
               "Hard-zero fee (Invariant 7). Asserted == 0 at init."
             ],
@@ -1256,23 +1493,32 @@ export type Settlement = {
             "type": "u8"
           },
           {
-            "name": "schemaVersion",
+            "name": "schema_version",
             "type": "u16"
           },
           {
-            "name": "evidenceProgram",
+            "name": "evidence_program",
             "docs": [
               "Registered satellite program ids authorized to advance Experiment.status via CPI."
             ],
             "type": "pubkey"
           },
           {
-            "name": "settlementProgram",
+            "name": "settlement_program",
             "type": "pubkey"
           },
           {
-            "name": "challengeProgram",
+            "name": "challenge_program",
             "type": "pubkey"
+          },
+          {
+            "name": "abort_grace_seconds",
+            "docs": [
+              "Timeout offset (seconds) for the permissionless `abort_experiment` path",
+              "(state-machine v1.1 tx12): abort is permissionlessly reachable once",
+              "`now > evaluation_deadline + abort_grace_seconds`."
+            ],
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -1282,7 +1528,7 @@ export type Settlement = {
       }
     },
     {
-      "name": "rewardClaimed",
+      "name": "RewardClaimed",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1291,7 +1537,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "leafIndex",
+            "name": "leaf_index",
             "type": "u64"
           },
           {
@@ -1299,7 +1545,7 @@ export type Settlement = {
             "type": "pubkey"
           },
           {
-            "name": "amountBaseUnits",
+            "name": "amount_base_units",
             "type": "u64"
           }
         ]

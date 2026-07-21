@@ -34,6 +34,19 @@ example `901b08d5…`. See [[spec-invariants-and-conventions]].
 `aborted`. **New ProtocolConfig field:** `abort_grace_seconds`. tx6 now also self-loops
 `Evaluating→Evaluating` for corrected re-submission after an upheld challenge.
 
+**M2 re-review Warnings W1/W2 — DISCLOSED, DEFERRED to M4** (doc-only, no behavior/schema/hash change,
+2026-07). Added `threat-model.md` §5 "Deferred hardening items (tracked for M4)" + a W2 inverse row in
+§3.4 + a one-line pointer in `state-machine.md` §5 (v1.1.0). Both accepted for devnet zero-value MVP
+(Invariant 7), MUST fix before real-value deployment:
+- **W2** — tx8 dismissed-challenge bond forfeits to `experiment.coordinator`; multisig-gated resolution +
+  coordinator alignment = incentive to dismiss VALID challenges to capture bonds. On-chain control: none
+  beyond off-chain verifier detectability. M4 fix: route bond to neutral sink (burn or non-coordinator
+  config treasury).
+- **W1** — tx12 permissionless timeout-abort (`evaluation_deadline + abort_grace_seconds`) can discard a
+  valid ready-to-finalize evaluation from `Evaluating` because tx1 does NOT enforce
+  `abort_grace_seconds > challenge_window_seconds`. Liveness inversion, no theft. M4 fix: enforce that
+  inequality at create, and/or reject timeout-abort when `status==Evaluating && evaluation_valid`.
+
 **M3 (advisory accounting)** documented in `reward-policy.md` new section "Advisory on-chain accounting":
 `Distribution.total_allocated_base_units` is an advisory ≤-budget bound, NOT cryptographically bound to
 `Σ leaf_i`. Real guardrails: per-claim Merkle-proof ceiling + verifier/challenge reproduction

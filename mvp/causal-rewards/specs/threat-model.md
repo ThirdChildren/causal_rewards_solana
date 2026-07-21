@@ -84,6 +84,7 @@ Goals: stall finality, harass the coordinator/evaluator, force repeated re-work.
 | Keep the experiment in `Challenged` forever. | Finalization requires **both** `now ≥ challenge_window_end` **and** `open_challenges == 0` (`finalize_distribution`, `state-machine.md` tx9). A challenger cannot stall past the window by leaving a challenge open indefinitely: `resolve_challenge` (multisig) drives `open_challenges` to 0, and if the whole flow is abandoned, `abort_experiment` (multisig or the permissionless timeout `evaluation_deadline + abort_grace_seconds`) unwinds it and refunds open bonds. Neither a stuck challenge nor a coordinator walk-away can trap funds pre-`Final`. |
 | Open a challenge, then let it be dismissed, to collapse the finalize window early for honest not-yet-opened challengers. | Fixed guard (finding M1): the removed `ever_challenged` short-circuit no longer exists. Finalize still requires `now ≥ challenge_window_end`, so a dismissed challenge (which only decrements `open_challenges`) cannot shorten the honest window. |
 | Frivolous challenge to extract a settlement. | Resolution is adjudicated against a verifier CLI re-run, not negotiation; a correct evaluation cannot be overturned, so there is nothing to extract. |
+| **(Inverse — coordinator/authority side.)** Coordinator dismisses a *valid* challenge to capture the honest challenger's forfeited bond. | **Residual — tracked, W2.** On `resolve_challenge`, a *dismissed* challenge's bond currently forfeits to `experiment.coordinator` (`state-machine.md` tx8). Because resolution is multisig-gated (C-MULTI) and the coordinator is typically aligned with the resolving multisig, this composes evaluator-tampering (§3.2) with authority-compromise (§4, key compromise) into an incentive to *wrongly dismiss* correct challenges and pocket the bond. **Current on-chain control: none** beyond off-chain detectability — an honest party's verifier CLI re-run still shows the challenge was correct, making the wrongful dismissal publicly visible (but not reversible or penalized on-chain). See §5 (W2) for the accepted-for-devnet decision and the M4 remediation. |
 
 ## 4. Residual risks (out of scope for on-chain enforcement)
 
@@ -97,3 +98,52 @@ Goals: stall finality, harass the coordinator/evaluator, force repeated re-work.
 - **Key compromise.** Compromise of a threshold of multisig signers, or of the coordinator key,
   is outside this model's protection; standard key hygiene applies. Devnet-only scope (Invariant 7)
   bounds the blast radius for the MVP.
+
+## 5. Deferred hardening items (tracked for M4)
+
+These are *known* on-chain gaps surfaced by the M2 security re-review (verdict: GO with two
+Warnings). They are **not** permanently out of scope like §4; they are disclosed here and tracked
+for the M4 hardening milestone. Each is **accepted for the devnet, zero-value MVP** under
+Invariant 7 (no mainnet, no token, no custody of real budgets), and each **MUST** be remediated
+before any real-value deployment. No protocol behavior, schema, or hashed artifact changes as part
+of this disclosure — the fixes land in M4.
+
+### W2 — dismissed-challenge bond forfeits to the coordinator (collusion incentive)
+
+- **Risk.** A *dismissed* challenge's bond is currently paid to `experiment.coordinator`
+  (`state-machine.md` tx8 `resolve_challenge`). Challenge resolution is multisig-gated (C-MULTI),
+  and in the reference topology the coordinator is typically aligned with the resolving multisig.
+  This creates a direct incentive to dismiss *valid* challenges in order to capture honest
+  challengers' bonds — a composition of evaluator-tampering (§3.2) and authority compromise
+  (§4, key compromise). See the inverse row in §3.4.
+- **Current on-chain control.** None beyond off-chain detectability: an independent verifier CLI
+  re-run still demonstrates that the dismissed challenge was correct (C-DET, Invariant 6), making a
+  wrongful dismissal publicly visible — but the on-chain resolution is neither reversed nor
+  penalized, and the forfeited bond is not recoverable on-chain.
+- **Decision.** Accepted for the devnet, zero-value MVP (Invariant 7): with no real bond value at
+  stake the incentive has no economic bite. **MUST** be fixed before any real-value deployment.
+- **Intended M4 remediation.** Route a dismissed challenge's bond to a **neutral sink** — either
+  burn it, or send it to a config-level treasury that is **not** controlled by the coordinator —
+  so that dismissing a challenge yields no gain to the resolving authority.
+
+### W1 — permissionless abort can discard earned rewards from `Evaluating` (liveness inversion)
+
+- **Risk.** The permissionless-timeout branch of `abort_experiment` (`state-machine.md` tx12)
+  opens at `evaluation_deadline + ProtocolConfig.abort_grace_seconds`. `create_experiment` (tx1)
+  does **not** currently enforce any relation between `abort_grace_seconds` and
+  `challenge_window_seconds`. If `abort_grace_seconds` is not strictly larger than
+  `challenge_window_seconds`, the timeout-abort branch can open *while a valid, ready-to-finalize
+  evaluation is still inside its (legitimate) challenge window*. Any caller could then abort a
+  sound experiment out of `Evaluating`, returning the vault to the coordinator and discarding the
+  rewards the evaluation earned. This is a **liveness inversion (no theft):** no attacker is paid,
+  but honest earned rewards can be destroyed and the flow forced to restart.
+- **Current on-chain control.** None specific to this branch: tx12's timeout guard checks only
+  `now > evaluation_deadline + abort_grace_seconds` and pre-`Final` status; it does not exclude a
+  still-valid in-window evaluation, and tx1 does not constrain the grace/window relation.
+- **Decision.** Accepted for the devnet, zero-value MVP (Invariant 7): experiments carry no
+  real-value budget, so a spurious abort costs only re-execution. **MUST** be fixed before any
+  real-value deployment.
+- **Intended M4 remediation.** Enforce `abort_grace_seconds > challenge_window_seconds` as a
+  precondition at `create_experiment`, **and/or** reject the permissionless timeout-abort branch
+  when `status == Evaluating && evaluation_valid == true` (i.e., never let the timeout path discard
+  a valid, unchallenged, ready-to-finalize evaluation). The multisig abort path is unaffected.

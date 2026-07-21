@@ -178,6 +178,120 @@
       ]
     },
     {
+      "name": "refund_bond",
+      "docs": [
+        "Refund a still-open challenge bond after the experiment was aborted (tx12).",
+        "",
+        "Permissionless crank: unlocked once `experiment.aborted == true` (set by",
+        "`settlement::abort_experiment`). Returns THIS challenge's escrowed bond to its",
+        "challenger — an un-adjudicated bond is refunded, never forfeited. Replay-protected",
+        "by requiring `resolution == UNSET` and stamping `RESOLUTION_REFUNDED`. Already",
+        "resolved challenges keep their prior resolution and are ineligible here."
+      ],
+      "discriminator": [
+        109,
+        18,
+        121,
+        67,
+        25,
+        121,
+        130,
+        179
+      ],
+      "accounts": [
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "experiment_registry_program"
+            }
+          }
+        },
+        {
+          "name": "experiment",
+          "relations": [
+            "challenge"
+          ]
+        },
+        {
+          "name": "challenge",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  108,
+                  108,
+                  101,
+                  110,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "experiment"
+              },
+              {
+                "kind": "account",
+                "path": "challenge.challenger",
+                "account": "Challenge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bond_vault",
+          "writable": true
+        },
+        {
+          "name": "bond_destination",
+          "writable": true
+        },
+        {
+          "name": "cranker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "experiment_registry_program",
+          "address": "8DotPgXajgeHt68htC7vbuvScUDkQa9ZPi3a5Sk1mioj"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "resolve_challenge",
       "docs": [
         "Resolve a challenge. Multisig-gated. `upheld = true` invalidates the evaluation",
@@ -335,6 +449,19 @@
   ],
   "events": [
     {
+      "name": "BondRefunded",
+      "discriminator": [
+        52,
+        32,
+        75,
+        36,
+        37,
+        139,
+        123,
+        17
+      ]
+    },
+    {
       "name": "ChallengeOpened",
       "discriminator": [
         42,
@@ -416,9 +543,34 @@
       "code": 6010,
       "name": "MintMismatch",
       "msg": "Token mint mismatch"
+    },
+    {
+      "code": 6011,
+      "name": "NotAborted",
+      "msg": "Experiment has not been aborted; bond refund is not available"
     }
   ],
   "types": [
+    {
+      "name": "BondRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "experiment",
+            "type": "pubkey"
+          },
+          {
+            "name": "challenger",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "Challenge",
       "type": {
@@ -635,28 +787,44 @@
             }
           },
           {
-            "name": "evaluation_present",
-            "type": "bool"
-          },
-          {
-            "name": "evaluation_invalidated",
-            "type": "bool"
-          },
-          {
-            "name": "ever_challenged",
+            "name": "evaluation_valid",
+            "docs": [
+              "True iff a live, non-invalidated `Evaluation` is present (set at",
+              "`submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).",
+              "It is the sole `evaluation is finalizable` predicate (state-machine v1.1);",
+              "starts `false` at create (no evaluation yet). Replaces the previous",
+              "`evaluation_present`/`evaluation_invalidated` pair and the removed",
+              "`ever_challenged` gate (security findings H2/M1)."
+            ],
             "type": "bool"
           },
           {
             "name": "open_challenges",
+            "docs": [
+              "`open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of",
+              "unresolved `Challenge` accounts; checked_add/sub only."
+            ],
             "type": "u32"
           },
           {
             "name": "challenge_window_end",
+            "docs": [
+              "Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window",
+              "is defined only here so no earlier event can shorten it (security finding M1)."
+            ],
             "type": "i64"
           },
           {
             "name": "claim_window_end",
             "type": "i64"
+          },
+          {
+            "name": "aborted",
+            "docs": [
+              "Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted",
+              "(pre-`Final` escape from the fund trap, security finding H1). No 8th status word."
+            ],
+            "type": "bool"
           },
           {
             "name": "created_at",
@@ -753,6 +921,15 @@
           {
             "name": "challenge_program",
             "type": "pubkey"
+          },
+          {
+            "name": "abort_grace_seconds",
+            "docs": [
+              "Timeout offset (seconds) for the permissionless `abort_experiment` path",
+              "(state-machine v1.1 tx12): abort is permissionlessly reachable once",
+              "`now > evaluation_deadline + abort_grace_seconds`."
+            ],
+            "type": "i64"
           },
           {
             "name": "bump",

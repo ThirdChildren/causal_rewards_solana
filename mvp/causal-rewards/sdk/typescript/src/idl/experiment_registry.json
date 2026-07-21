@@ -271,13 +271,80 @@
         {
           "name": "challenge_program",
           "type": "pubkey"
+        },
+        {
+          "name": "abort_grace_seconds",
+          "type": "i64"
         }
       ]
     },
     {
+      "name": "mark_aborted",
+      "docs": [
+        "tx12: {Frozen,Active,Evaluating,Challenged} -> Closed (`aborted = true`). Settlement only.",
+        "",
+        "The authorization gate (multisig OR permissionless timeout) and the vault return +",
+        "still-open-bond refunds live in the settlement/challenge programs; this transition",
+        "enforces only the legal status set and stamps the `aborted` marker. NOT gated on",
+        "`paused` — abort is the bounded escape from the pre-`Final` fund trap (H1) and must",
+        "remain reachable so funds can never be trapped by pausing."
+      ],
+      "discriminator": [
+        169,
+        22,
+        33,
+        5,
+        212,
+        202,
+        207,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "protocol_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "experiment",
+          "writable": true
+        },
+        {
+          "name": "caller_authority",
+          "docs": [
+            "Authorizes the caller: PDA of the SETTLEMENT program signs this CPI."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "mark_challenged",
       "docs": [
-        "Evaluating|Challenged -> Challenged; increments open_challenges. Challenge program only."
+        "tx7: Evaluating|Challenged -> Challenged; increments open_challenges. Challenge only."
       ],
       "discriminator": [
         88,
@@ -391,7 +458,12 @@
     {
       "name": "mark_evaluating",
       "docs": [
-        "Active -> Evaluating (or re-Evaluating after an upheld challenge). Settlement only."
+        "tx6: Active -> Evaluating (first submission) or Evaluating -> Evaluating",
+        "(corrected re-submission after an upheld challenge). Settlement only.",
+        "",
+        "Writes the ABSOLUTE `challenge_window_end` once here (never derived elsewhere,",
+        "so no earlier event can shorten it — security finding M1), sets",
+        "`evaluation_valid = true`, and re-initializes `open_challenges = 0`."
       ],
       "discriminator": [
         123,
@@ -453,7 +525,11 @@
     {
       "name": "mark_final",
       "docs": [
-        "Evaluating|Challenged -> Final. Settlement only."
+        "tx9: Evaluating -> Final. Settlement only.",
+        "",
+        "Guard (security finding M1): finalize is taken ONLY from `Evaluating` and requires",
+        "the conjunction `now >= challenge_window_end AND open_challenges == 0 AND",
+        "evaluation_valid`. There is no `ever_challenged` short-circuit."
       ],
       "discriminator": [
         76,
@@ -616,7 +692,12 @@
     {
       "name": "resolve_dismissed",
       "docs": [
-        "Resolve a challenge as DISMISSED: decrement open_challenges; stay Challenged. Challenge only."
+        "tx8: resolve exactly ONE challenge as DISMISSED. Challenge only.",
+        "",
+        "Decrements `open_challenges` by 1 and leaves `evaluation_valid` untouched. State",
+        "returns to `Evaluating` only when `open_challenges` reaches 0 (security finding H2);",
+        "a dismissed challenge NEVER shortcuts the finalize window for a not-yet-opened",
+        "honest challenge (security finding M1 — there is no `ever_challenged` flag)."
       ],
       "discriminator": [
         124,
@@ -673,7 +754,13 @@
     {
       "name": "resolve_upheld",
       "docs": [
-        "Resolve a challenge as UPHELD: evaluation invalidated, back to Evaluating. Challenge only."
+        "tx8: resolve exactly ONE challenge as UPHELD. Challenge only.",
+        "",
+        "`open_challenges` is the SOLE gate for leaving `Challenged` (security finding H2):",
+        "this decrements the counter by 1 and sets `evaluation_valid = false` (an upheld",
+        "resolution invalidates the evaluation regardless of order). State returns to",
+        "`Evaluating` only when `open_challenges` reaches 0; otherwise it stays `Challenged`",
+        "and every remaining challenge is still independently resolvable."
       ],
       "discriminator": [
         206,
@@ -908,6 +995,19 @@
       ]
     },
     {
+      "name": "ExperimentAborted",
+      "discriminator": [
+        191,
+        142,
+        47,
+        239,
+        108,
+        171,
+        159,
+        5
+      ]
+    },
+    {
       "name": "ExperimentCreated",
       "discriminator": [
         161,
@@ -1056,13 +1156,13 @@
     },
     {
       "code": 6016,
-      "name": "EvaluationInvalidated",
-      "msg": "Evaluation was invalidated by an upheld challenge; resubmit required"
+      "name": "EvaluationNotValid",
+      "msg": "Evaluation is not valid (never submitted, or invalidated by an upheld challenge; resubmit required)"
     },
     {
       "code": 6017,
       "name": "ChallengeWindowNotElapsed",
-      "msg": "Challenge window has not elapsed and challenges remain unresolved"
+      "msg": "Challenge window has not elapsed"
     },
     {
       "code": 6018,
@@ -1088,6 +1188,16 @@
       "code": 6022,
       "name": "MintMismatch",
       "msg": "Vault mint does not match experiment mint"
+    },
+    {
+      "code": 6023,
+      "name": "AbortNotAllowed",
+      "msg": "abort_experiment is only reachable from a pre-Final state (Frozen/Active/Evaluating/Challenged)"
+    },
+    {
+      "code": 6024,
+      "name": "AlreadyAborted",
+      "msg": "Experiment already aborted"
     }
   ],
   "types": [
@@ -1369,28 +1479,44 @@
             }
           },
           {
-            "name": "evaluation_present",
-            "type": "bool"
-          },
-          {
-            "name": "evaluation_invalidated",
-            "type": "bool"
-          },
-          {
-            "name": "ever_challenged",
+            "name": "evaluation_valid",
+            "docs": [
+              "True iff a live, non-invalidated `Evaluation` is present (set at",
+              "`submit_evaluation` / tx6, cleared to `false` by an upheld challenge / tx8).",
+              "It is the sole `evaluation is finalizable` predicate (state-machine v1.1);",
+              "starts `false` at create (no evaluation yet). Replaces the previous",
+              "`evaluation_present`/`evaluation_invalidated` pair and the removed",
+              "`ever_challenged` gate (security findings H2/M1)."
+            ],
             "type": "bool"
           },
           {
             "name": "open_challenges",
+            "docs": [
+              "`open_challenges` is the SOLE gate for leaving `Challenged` (tx8). u32 count of",
+              "unresolved `Challenge` accounts; checked_add/sub only."
+            ],
             "type": "u32"
           },
           {
             "name": "challenge_window_end",
+            "docs": [
+              "Absolute unix ts written ONCE at `submit_evaluation` (tx6); the finalize window",
+              "is defined only here so no earlier event can shorten it (security finding M1)."
+            ],
             "type": "i64"
           },
           {
             "name": "claim_window_end",
             "type": "i64"
+          },
+          {
+            "name": "aborted",
+            "docs": [
+              "Set only by `abort_experiment` (tx12). Marks a `Closed` experiment as aborted",
+              "(pre-`Final` escape from the fund trap, security finding H1). No 8th status word."
+            ],
+            "type": "bool"
           },
           {
             "name": "created_at",
@@ -1403,6 +1529,37 @@
           {
             "name": "vault_bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExperimentAborted",
+      "docs": [
+        "Emitted when `abort_experiment` (tx12) drives a pre-`Final` experiment to",
+        "`Closed` with `aborted = true` (security finding H1)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "experiment",
+            "type": "pubkey"
+          },
+          {
+            "name": "from",
+            "docs": [
+              "Status the experiment was in immediately before abort."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "open_challenges",
+            "docs": [
+              "Open challenges recorded at abort time (their bonds are refundable via the",
+              "challenge program's `refund_bond` crank)."
+            ],
+            "type": "u32"
           }
         ]
       }
@@ -1545,6 +1702,15 @@
           {
             "name": "challenge_program",
             "type": "pubkey"
+          },
+          {
+            "name": "abort_grace_seconds",
+            "docs": [
+              "Timeout offset (seconds) for the permissionless `abort_experiment` path",
+              "(state-machine v1.1 tx12): abort is permissionlessly reachable once",
+              "`now > evaluation_deadline + abort_grace_seconds`."
+            ],
+            "type": "i64"
           },
           {
             "name": "bump",
