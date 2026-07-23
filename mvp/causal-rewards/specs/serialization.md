@@ -1,6 +1,14 @@
 # Canonical Serialization & Hashing (NORMATIVE — RATIFIED)
 
-**Spec version:** 1.0.0
+**Spec version:** 1.1.0
+**Wire/hash contract version:** 1.1.0 — advanced from 1.0.0 by an **additive, hash-compatible**
+minor revision (see §9 Revision history). Every pre-existing golden is **byte-identical** to 1.0:
+manifest `74e0bb82…`, `reward_curve_hash` `14b0ec34…`, evidence example `901b08d5…`, and all 11
+existing assignment roots (bernoulli / fixed_count). The manifest `spec_version` field stays
+`"1.0.0"` and a v1.0.0 manifest hashes identically under 1.1. v1.1 only **pins previously-open
+residuals** (reward `leaf_index` assignment, §6.6; switchback + matched_cluster seed→assignment
+derivations, §7.4) and adds their new-but-additive byte layouts — it changes no byte of any existing
+hashed artifact.
 **Status:** RATIFIED. This is the single authoritative byte-level definition. No PROVISIONAL banner.
 **Owner:** `protocol-architect` (ratifier). Ratified from the `verifier-reproducibility-engineer`
 proposal (`verifier-cli/docs/canonical-serialization.md`) and its reference implementation
@@ -215,9 +223,9 @@ set always build the identical tree. Per tree type:
   before the first participant golden root is committed (M2).
 - **reward:** PINNED — see §6.6 (reward leaf preimage + `leaf_index` ordering). Leaves are placed in
   `leaf_index` order: ascending, contiguous from 0 (tree position `p` ⇒ `leaf_index == p`). Duplicate
-  or gapped `leaf_index` is a hard error. A single, clearly-scoped M3 residual remains (the tie-break
-  used to *assign* `leaf_index` when `(recipient, amount)` is not unique — §6.6); the leaf preimage
-  itself is fully pinned.
+  or gapped `leaf_index` is a hard error. `leaf_index` is assigned by ranking the **aggregate-one-
+  leaf-per-recipient** set ascending by `recipient` (unique key), then `amount_base_units` — fully
+  pinned in v1.1 (RESIDUAL A closed, §6.6); no tie-break residual remains.
 
 ### 6.3 Odd-node handling
 
@@ -308,6 +316,20 @@ set of that epoch. The two sub-commitment roots are ordinary string fields insid
 so their determinism (via the ordering above) is what makes the enclosing evidence `leaf_hash`
 deterministic in turn.
 
+**Vector-readiness (RATIFIED v1.1, RESIDUAL C closed).** All three evidence trees are complete and
+unambiguous for golden-vector construction: each has (a) a fixed leaf preimage, (b) a total,
+data-derived sort key (`leaf_hash` / `observation_commitment_be32` / `signer_pubkey_be32`, all
+32-byte unsigned big-endian compares), (c) an explicit tie-break (strict monotonicity ⇒ duplicates
+are a hard error), and (d) the shared §6.1 node formulas + §6.3 promotion + §6.4 empty-tree
+sentinel. Nothing in leaf construction, ordering, or root computation is left to producer choice, so
+`verifier-reproducibility-engineer` can build byte-identical golden evidence roots (epoch, signer,
+observation) for any batch set. No change to §6.5 bytes was needed in v1.1; this note only records
+the confirmation. *(Adjacent, OUT OF SCOPE of §6.5's leaf sort key and NOT changed here: how a
+multi-batch epoch's per-batch sub-roots map onto the singular `EvidenceEpoch.signer_set_root` /
+`observations_root` account fields — that on-chain account-field question is owned by the
+evidence-registry / state-machine surface, not by the Merkle leaf-ordering rule, which is fully
+pinned above.)*
+
 ### 6.6 Reward tree (leaf form + ordering, RATIFIED)
 
 The reward tree is a §6.1-shaped Merkle tree over one leaf per reward entry produced by the Stage-2
@@ -357,21 +379,41 @@ Because position `== leaf_index`, `build_proof`/`verify_proof` (§6.1) address a
 `leaf_index`, which is also the exact value `claim_reward` takes and the nullifier key — one integer
 identifies the leaf end-to-end.
 
-**`leaf_index` assignment (data-derived; one scoped M3 residual).** For the tree to be reproducible
-(Invariant 2), `leaf_index` MUST be a deterministic, **data-derived total ranking** of the compiler's
-final reward-leaf set — never insertion order, wall-clock, or unseeded iteration (the same anti-
-insertion-order rule as §6.2). The primary rank key is **PINNED now: ascending by `recipient`
-(unsigned big-endian 32-byte compare, i.e. `sol_memcmp` order), then ascending by
-`amount_base_units`**; `leaf_index` is the 0-based rank under this key. **RESIDUAL (M3, minimal and
-sole):** when the compiler's leaf-set shape does not make `(recipient, amount_base_units)` a unique
-key — e.g. if it emits one leaf per (recipient × cohort) rather than one aggregated leaf per
-recipient — a final tie-break sub-key is appended to the rank. That tie-break (equivalently: whether
-the leaf set is aggregated-per-recipient) is a `reward-policy.md` reward-compiler decision and MUST
-be fixed there and pinned here **before the first reward golden root is committed**. This residual
-does not touch the leaf *preimage* (fully pinned above); it only fixes how the compiler *numbers*
-leaves. The encoding pinned here therefore constrains the compiler no further than `reward-policy.md`
-already does: the compiler owns the leaf *values* `(recipient, amount_base_units)` (Stage 2) and this
-residual; §6.6 owns only their byte layout and the index-based tree order.
+**`leaf_index` assignment (data-derived; RATIFIED v1.1, RESIDUAL A closed).** For the tree to be
+reproducible (Invariant 2), `leaf_index` MUST be a deterministic, **data-derived total ranking** of
+the compiler's final reward-leaf set — never insertion order, wall-clock, or unseeded iteration (the
+same anti-insertion-order rule as §6.2).
+
+*Leaf-set shape (PINNED): aggregate-one-leaf-per-recipient.* The Stage-2 compiler
+(`reward-policy.md`) produces a per-`(recipient, cohort)` amount `leaf_i(c)` (a recipient is
+identified by the 32-byte ed25519 signer pubkey that signed its observations, which is exactly the
+reward `recipient`). The reward leaf set is the **aggregate over cohorts**: for each distinct
+recipient `R`, one leaf `(R, amount_base_units = Σ_c leaf_i(c))`, and **recipients whose aggregate
+sum is 0 are omitted** (a zero leaf is unclaimable value and wastes a `leaf_index` / nullifier PDA).
+Aggregation is integer addition of already-final amounts — it introduces no rounding (§2.4) and
+preserves the budget guarantee exactly (`Σ_R amount(R) = Σ_c Σ_i leaf_i(c) ≤ Σ_c budget_c ≤ B`,
+`reward-policy.md`). It is a settlement-representation choice fully downstream of the frozen Stage-2
+split: it alters no effect estimate, weight, or split ratio (Invariant 4 is already satisfied at
+Stage 1) and it minimizes on-chain footprint — one leaf, one claim, one nullifier per recipient
+(Invariant 5). This is fixed in `reward-policy.md` Stage 2 and pinned here.
+
+*Rank key (PINNED): ascending by `recipient`* (unsigned big-endian 32-byte compare, i.e.
+`sol_memcmp` order), *then ascending by `amount_base_units`*; `leaf_index` is the 0-based rank under
+this key. **No further tie-break is needed and none exists:** the aggregate-per-recipient shape makes
+`recipient` a **unique primary key** across the leaf set (two leaves cannot share a 32-byte
+`recipient` — that would be the same recipient, already merged by aggregation), so `recipient` alone
+totally orders the leaves. `amount_base_units` is retained as the pinned secondary key for defensive
+consistency but is never decisive. Because `recipient` is unique, **a leaf set containing two leaves
+with the same `recipient` is a hard error** (a compiler bug); the SDK's existing *reject-on-
+ambiguity* is therefore the correct, still-required defensive behavior — after v1.1 it can only fire
+on a malformed compiler output, never on a legitimate ambiguous tie.
+
+This closes the residual without touching the leaf *preimage* (fully pinned above); it only fixes how
+the compiler *numbers* leaves. §6.6 owns the byte layout and the index-based tree order; the compiler
+(`reward-policy.md`) owns the leaf *values* `(recipient, amount_base_units)` and the aggregate shape.
+*(A future variant that instead committed one leaf per `(recipient × cohort)` for on-chain
+per-cohort transparency would need a tie-break sub-key — the natural one being the stratum/`cohort_id`
+— and would be a versioned migration (§9), not the pinned v1.1 shape.)*
 
 **experiment binding (DECIDED): the reward leaf does NOT bind `experiment_id`.** This follows the
 §7.5 assignment-leaf precedent, for the same reason and with the same safety argument. The
@@ -444,12 +486,105 @@ part of any leaf preimage (it is a deterministic function of the committed/revea
   sort cohorts by `(prf_u64, cohort_id)` ascending; the first `k` are `treatment`. Exact balance;
   `cohort_id` breaks `prf_u64` ties.
 
-These two derivations cover cluster-randomized (bernoulli) and matched/balanced (fixed_count). The
-switchback and matched-cluster templates require their own derivation rules; those MUST be pinned
-here before their first assignment root is committed (open item for M2, jointly with
-`causal-inference-engineer`). This is orthogonal to freezing switchback *design parameters* in the
-manifest (carryover/washout/interference), which is done now (see `manifest.schema.json`
-`design.parameters`).
+**Derivation selector (manifest → derivation name).** The derivation is selected by the manifest's
+`treatment.assignment_method`, mapped to the derivation names used here and in the reference
+implementation:
+
+| `treatment.assignment_method` | `design.template` | §7.4 derivation |
+| --- | --- | --- |
+| `bernoulli` | `cluster_randomized` | **bernoulli** (above) |
+| `complete_randomization` | `cluster_randomized` | **fixed_count** (above) |
+| `switchback_schedule` | `switchback` | **switchback** (below) |
+| `matched_pair` | `matched_cluster` | **matched_cluster** (below) |
+
+(`observational_replay` is a design template, not eligible for the strong causal claim, and defines
+no randomized seed→assignment derivation: its "assignment" is the observed inclusion history, not a
+seed-derived one, so it has no assignment root of this kind.)
+
+**Composite cohort-id grammar (switchback and matched_cluster ONLY).** `bernoulli` and `fixed_count`
+treat `cohort_id` as an opaque string. The two derivations below instead require structure in the
+id, so — for these two designs and ONLY these two — every `cohort_id` in the cohort set MUST match:
+
+```
+composite_cohort_id := group "|" index
+"|"    := U+007C, appearing EXACTLY once in the id
+group  := one or more characters, none of which is "|"
+          (the geo-cohort id for switchback; the matched-stratum id for matched_cluster)
+index  := canonical unsigned integer string (§2.1 form, ^(0|[1-9][0-9]*)$ — no leading zeros)
+          (the period_index for switchback; the within-stratum member_index for matched_cluster)
+```
+
+Parsing splits on the single `|`. A `cohort_id` (under these two designs) with zero or more than one
+`|`, an empty `group`, or a non-canonical `index` is a **hard error**, rejected before derivation.
+The assignment leaf (§7.5) still carries the FULL composite `cohort_id` unchanged, and assignment
+leaves still sort by the full `cohort_id` (§6.2): the grammar governs only how a derivation reads
+structure out of the id, never the leaf form or the leaf ordering.
+
+- **switchback** — a **regional randomized-phase switchback**. Each unit is `(group, index) =
+  (geo_cohort, period_index)`. Randomization is **one phase bit per geo-cohort**, applied by
+  alternation across periods. Reuses the §7.3 PRF verbatim, keyed on the `group` substring alone:
+
+  ```
+  phase(group)      = cohort_prf(seed, experiment_id, group) & 1     # low bit of prf_u64; ∈ {0,1}
+  arm(group, index) = "treatment"  iff  ((index + phase(group)) mod 2) == 1
+                    = "control"     otherwise
+  ```
+
+  Integer arithmetic only (a PRF low bit, an integer add, a mod 2). `phase(group)` is computed once
+  per distinct `group`; every unit sharing that `group` uses the same phase and the arm alternates
+  every period — a balanced switchback (≈50% treated time per geo; exactly balanced when a geo's
+  period count is even). Because alternation is structurally 50/50, `treated_fraction_micro` MUST be
+  `"500000"` for a switchback manifest (enforced by the causal engine); the derivation itself does
+  **not** read `treated_fraction_micro`. `carryover_blocks` / `washout_blocks` are ANALYSIS-time
+  discard parameters (which blocks within a period are dropped to neutralize carryover) and do NOT
+  enter this derivation — they are frozen in the manifest for the pre-analysis plan and consumed by
+  the estimator, not here. `arm` is defined for any `index ≥ 0`; a geo's period indices need not be
+  contiguous (the arm is a pure function of `(group, index)` regardless).
+
+  *Modeling note (for `causal-inference-engineer` confirmation; does NOT block vectoring — the bytes
+  are pinned).* Per-geo randomized phase + deterministic alternation (chosen over independent-per-
+  period randomization or a single system-wide schedule) matches the frozen `interference_assumption
+  = partial_interference_within_cohort` and the per-geo-cohort × time-block estimand (regional
+  switchback; cf. Bojinov–Simchi-Levi–Zhao and Hu–Wager). It is pinned here so the derivation is
+  byte-deterministic now; changing the schedule policy is a versioned migration (§9), not a silent
+  edit, and would only then require regenerating switchback vectors.
+
+- **matched_cluster** — within each frozen matched stratum, a fixed number of members are treated,
+  chosen by the §7.3 PRF. Each unit is `(group, index) = (stratum_id, member_index)`. The stratum
+  membership (which cohorts share a `group`, and each stratum's size `m_s`) is the coordinator's
+  frozen matching, carried in the cohort-id set and committed by `cohort_root` — it is a pre-analysis
+  input (Invariant 1), not a manifest field. Reuses the §7.3 PRF keyed on the FULL composite
+  `cohort_id`:
+
+  ```
+  for each stratum s (the set of units sharing one `group`):
+    m_s = |members of s|
+    k_s = round_he( treated_fraction_micro * m_s / 1_000_000 ), clamped to [0, m_s]   # §2.4 rule
+    rank members ascending by (prf_u64(FULL cohort_id), index)     # `index` breaks prf ties,
+                                                                   # exactly as fixed_count uses cohort_id
+    first k_s ranked members -> "treatment";  the rest -> "control"
+  ```
+
+  Exact within-stratum balance. `k_s` is computed by integer arithmetic implementing round-half-to-
+  even (§2.4) on the exact rational `treated_fraction_micro·m_s / 1e6`: with `N = treated_fraction_micro·m_s`,
+  `D = 1_000_000`, `q = N // D`, `r = N mod D` — take `q` if `2r < D`, `q+1` if `2r > D`, and if
+  `2r == D` take `q` when `q` is even else `q+1`; then clamp to `[0, m_s]`. For the canonical matched
+  **pair** (`m_s = 2`, `treated_fraction_micro = "500000"`): `k_s = round_he(1.0) = 1` — exactly one
+  of each pair treated. Every stratum is processed independently; the per-cohort arm is fully
+  determined, and `member_index` deterministically breaks any `prf_u64` tie inside a stratum.
+
+  *Modeling note (for `causal-inference-engineer` confirmation; does NOT block vectoring).* The
+  QUALITY of the matching (whether stratum members are balanced on baseline covariates) is a design-
+  validity question owned by the causal design, not a determinism question — this derivation is
+  deterministic for ANY frozen stratification. Pinned here is only the byte-level rule that turns a
+  frozen stratification + seed into arms.
+
+All four randomized `(design.template, assignment_method)` pairings the manifest admits now have a
+pinned, reproducible seed→assignment derivation using only §7.3 (no new primitive), only integer
+arithmetic, and no wall-clock / unseeded RNG / float (Invariant 2). `verifier-reproducibility-
+engineer` can commit golden assignment roots for switchback and matched_cluster exactly as for the
+existing 11. This is orthogonal to freezing switchback *design parameters* in the manifest
+(carryover/washout/interference), already done (see `manifest.schema.json` `design.parameters`).
 
 ### 7.5 Assignment leaf
 
@@ -467,7 +602,49 @@ verification costlier) and does **not** bind `prf_u64` (a derived intermediate).
 
 An implementation conforms to this document iff, for every input in `test-vectors/`, it reproduces:
 the canonical UTF-8 bytes (`ser-*`), the seed commitment, each per-cohort `prf_u64`, each canonical
-leaf's bytes and hash, and the assignment Merkle root (`assign-*`). The reference implementation in
-`verifier-cli/reference/` is the executable form of §2–§7 and generates/checks those vectors. The
-manifest golden hash (`manifest.golden.md`) is reproduced by feeding the canonical example manifest
-through this exact serializer — no assumed field layout, only §2–§5 applied to the JSON value.
+leaf's bytes and hash, and the assignment Merkle root (`assign-*`) — including, under v1.1, the
+switchback and matched_cluster assignment roots (§7.4) and the reward and evidence Merkle roots
+(§6.6, §6.5). The reference implementation in `verifier-cli/reference/` is the executable form of
+§2–§7 and generates/checks those vectors. The manifest golden hash (`manifest.golden.md`) is
+reproduced by feeding the canonical example manifest through this exact serializer — no assumed field
+layout, only §2–§5 applied to the JSON value.
+
+## 9. Revision history
+
+The wire/hash contract version and this document's version advance together (both `serialization.md`
+is wholly the wire/hash contract). A change that alters no byte of any existing hashed artifact is an
+**additive minor**; a change that alters a golden is a **major** and a manifest `spec_version` bump.
+
+### 1.1.0 — residual closure (additive, hash-compatible)
+
+- **Wire/hash contract: additive, hash-compatible.** No byte of any existing hashed artifact changed.
+  Manifest golden `74e0bb82…`, `reward_curve_hash` `14b0ec34…`, evidence example `901b08d5…`, and all
+  11 existing `assign-*` roots are **byte-identical** to 1.0. The manifest `spec_version` field stays
+  `"1.0.0"`; a v1.0.0 manifest is valid and hashes identically under 1.1. No manifest/evidence schema
+  field, example, or `spec_version` changed. Only previously-open residuals are pinned; the new byte
+  layouts they define are additive (they produce artifacts that did not exist under 1.0).
+- **RESIDUAL A — reward `leaf_index` assignment closed (§6.6, `reward-policy.md` Stage 2).** Reward
+  leaf-set shape is pinned as **aggregate-one-leaf-per-recipient** (sum a recipient's per-cohort
+  Stage-2 amounts into a single leaf; drop zero-sum recipients). This makes `recipient` a unique
+  primary key, so the pinned rank key (`recipient` asc, then `amount_base_units` asc) is a total order
+  with **no tie-break needed**; a duplicate `recipient` is a hard error, and the SDK's reject-on-
+  ambiguity remains the correct defensive guard. Resolves the former "(recipient, amount) not unique"
+  residual structurally, from the already-frozen Stage-2 split, with no causal-modeling change.
+- **RESIDUAL B — switchback + matched_cluster seed→assignment derivations pinned (§7.4).** Added a
+  derivation-selector map (`assignment_method` → derivation), a composite `group"|"index` cohort-id
+  grammar (switchback/matched_cluster only), the **switchback** derivation (per-geo phase bit via the
+  §7.3 PRF + parity alternation across periods; `treated_fraction_micro` must be `"500000"`;
+  carryover/washout are analysis-time, not assignment-time), and the **matched_cluster** derivation
+  (per-stratum `k_s = round_he(treated_fraction_micro·m_s/1e6)` treated, ranked by §7.3 PRF then
+  `member_index`). Both reuse §7.3 (no new primitive), integer-only, float-free. Two modeling notes
+  are flagged for `causal-inference-engineer` confirmation; they do NOT block vectoring because the
+  bytes are pinned (any later schedule/matching-policy change is a versioned migration).
+- **RESIDUAL C — evidence Merkle leaf sort keys confirmed complete (§6.5).** No byte change; recorded
+  a vector-readiness confirmation that all three evidence trees (epoch, signer, observation) have a
+  total, data-derived sort key with explicit tie-break, ready for golden evidence-root vectors.
+
+### 1.0.0 — initial ratified serialization
+
+Canonical CJSON (§2–§5), SHA-256 Merkle construction (§6), seed commitment + bernoulli/fixed_count
+assignment derivation (§7), reward leaf preimage (§6.6) and evidence trees (§6.5) pinned; manifest,
+reward-curve, evidence, and 11 assignment golden vectors committed.

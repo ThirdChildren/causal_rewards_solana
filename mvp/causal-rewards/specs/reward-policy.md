@@ -1,7 +1,11 @@
 # Reward Policy
 
-**Spec version:** 1.0.0
+**Spec version:** 1.1.0
 **Status:** M1 frozen-READY (awaiting orchestrator freeze gate).
+**v1.1.0 (additive, hash-compatible):** closes `serialization.md` §6.6 RESIDUAL A by pinning the
+reward **leaf-set shape** to *aggregate-one-leaf-per-recipient* (see "Reward leaf-set shape" under
+Stage 2). No frozen manifest field, schema, or golden hash changes — the leaf-set shape is a
+compiler/settlement decision, not a manifest field. Tracks `serialization.md` 1.1.0.
 
 The reward policy is a **two-stage** allocation, fully frozen in the manifest at `Frozen`
 (`reward_policy` object) and therefore fixed before the seed is revealed and before any outcome is
@@ -98,16 +102,38 @@ leaf_i = 0                            otherwise
 - This distributes a cohort-level amount; it makes no individual-device causal claim
   (Invariant 4).
 
-Each `leaf_i` becomes a leaf in the reward Merkle tree; the reward root is what
+### Reward leaf-set shape — aggregate-one-leaf-per-recipient (RATIFIED; §6.6 RESIDUAL A closed)
+
+The per-cohort `leaf_i(c)` above is an **intermediate** amount. The on-chain reward leaf set is the
+**aggregate over cohorts**: a recipient is identified by the 32-byte ed25519 signer pubkey that
+signed its observations (exactly the reward `recipient`), and for each distinct recipient `R` the
+compiler emits **one** leaf
+
+```
+amount_base_units(R) = Σ_c leaf_i(c)        # sum over every cohort c in which R earned a Stage-2 amount
+```
+
+and **omits any recipient whose aggregate sum is 0** (a zero leaf carries no value and would only
+waste a `leaf_index` and a `ClaimReceipt` nullifier PDA). Aggregation is integer addition of already-
+final, already-floored amounts: it introduces **no further rounding** (`serialization.md` §2.4) and
+preserves the budget guarantee exactly —
+`Σ_R amount_base_units(R) = Σ_c Σ_i leaf_i(c) ≤ Σ_c budget_c ≤ B`. It is chosen because it (1) makes
+`recipient` a **unique key**, giving a total leaf order with no tie-break (`serialization.md` §6.6);
+(2) minimizes on-chain footprint — one leaf, one claim, one nullifier per recipient (Invariant 5);
+and (3) is a settlement-representation choice fully downstream of the frozen Stage-2 split — it alters
+no effect estimate, weight, or split ratio, and makes no individual-device causal claim (Invariant 4,
+already satisfied at Stage 1). Per-cohort detail is still recorded in the audit bundle
+(`rewards.parquet`) for verification; only the on-chain leaf is aggregated.
+
+Each aggregated leaf becomes a leaf in the reward Merkle tree; the reward root is what
 `finalize_distribution` locks, and `claim_reward` proves against. The leaf's byte layout and the
 tree's leaf ordering are RATIFIED in `serialization.md` §6.6: the leaf preimage is
 `SHA-256( 0x00 || "CRP:reward:v1" || recipient(32) || amount_base_units(u64 BE) || leaf_index(u64 BE) )`,
-and leaves are placed by `leaf_index` ascending, contiguous from 0. One residual is owned **here**:
-the compiler must fix a deterministic, data-derived rule that assigns each leaf its `leaf_index`
-(primary rank key `(recipient, amount_base_units)` is pinned in §6.6; a tie-break is needed only if a
-recipient can hold more than one leaf — i.e. if leaves are **not** aggregated to one per recipient).
-This M3 decision — aggregate-per-recipient vs one leaf per (recipient × cohort), and the resulting
-tie-break — MUST be recorded here and pinned in §6.6 before the first reward golden root is built.
+and leaves are placed by `leaf_index` ascending, contiguous from 0, where `leaf_index` is the 0-based
+rank of the aggregate leaf set ordered by `recipient` ascending (unique primary key), then
+`amount_base_units` ascending. Because `recipient` is unique after aggregation, **two leaves sharing
+a `recipient` is a hard error** (a compiler bug); the SDK's reject-on-ambiguity is the correct
+defensive guard. No `leaf_index` tie-break residual remains.
 
 ### CRP-WS1 — the frozen weight-formula grammar
 

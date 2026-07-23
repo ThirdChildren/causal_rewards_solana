@@ -1,10 +1,13 @@
 # State Machine
 
 **State-machine / protocol-behavior version:** 1.1.0
-**Wire/hash contract version:** 1.0.0 — **UNCHANGED.** The manifest schema & example, the evidence
-schema & example, `serialization.md`, the manifest `spec_version` field `"1.0.0"`, and every golden
-hash (manifest `74e0bb82…`, `reward_curve_hash` `14b0ec34…`, evidence example `901b08d5…`) are
-byte-identical to v1.0. A v1.0.0 manifest is valid under v1.1 and hashes identically.
+**Wire/hash contract version:** 1.1.0 — advanced from 1.0.0 by an **additive, hash-compatible** minor
+revision in `serialization.md` v1.1 (residuals A/B/C: reward `leaf_index` assignment, switchback +
+matched_cluster derivations, evidence-sort-key confirmation). The manifest schema & example, the
+evidence schema & example, the manifest `spec_version` field `"1.0.0"`, and every golden hash
+(manifest `74e0bb82…`, `reward_curve_hash` `14b0ec34…`, evidence example `901b08d5…`) are
+byte-identical to v1.0. A v1.0.0 manifest is valid under v1.1 and hashes identically. This document's
+behavior text below is unchanged from state-machine v1.1.0.
 **Status:** M1 frozen-READY. v1.1 is a minor, additive, hash-compatible revision: it adds one
 on-chain instruction (`abort_experiment`) and tightens transitions 6, 8, and 9 to close the M2
 security findings (M1 challenge-window short-circuit, H1 pre-`Final` fund trap, H2 multi-challenge
@@ -131,6 +134,10 @@ state — so there is no pre-`Final` state from which funds can become permanent
 Versioning is two-track: a **wire/hash contract version** (governs the manifest/evidence schemas,
 `serialization.md`, all golden hashes) and this document's **state-machine / protocol-behavior
 version**. They advance independently; a behavior-only change does not bump the wire contract.
+The wire/hash contract's own revision history lives in `serialization.md` §9; it is currently at
+**1.1.0** (advanced additively by `serialization.md` v1.1, residuals A/B/C — no golden hash changed).
+The state-machine v1.1.0 entry below was a behavior-only change and did not itself move the wire
+contract (which was 1.0.0 at that time).
 
 ### v1.1.0 — settlement-flow hardening (this revision)
 
