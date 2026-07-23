@@ -13,7 +13,26 @@ metadata:
 
 **M3 PREREQUISITES (must land before M3 impl that consumes them):**
 - STEP 3 (architect, then verifier vectors): ratify (a) reward leaf_index tie-break when (recipient,amount) non-unique — SDK currently REJECTS, keep until ratified then all 3 impls agree; (b) switchback + matched-cluster assignment derivations (serialization.md §7.4 open) — deterministic + cross-impl vectored like the 11 cluster-randomized roots; (c) confirm evidence Merkle leaf sort key pinned (§6.5, done in discrepancy-1) + vectored before any evidence root. Bump spec version (v1.1/v1.2 migration), record new ratified hashes in handoff read-from-disk.
-- STEP 4 (causal-eng, verifier confirms): fix simulator canonical.py NFC/ensure_ascii divergence (carried discrepancy #2) before sim emits any cross-checked golden hash; verifier confirms with a non-ASCII fixture.
+- STEP 4 (causal-eng): DONE + orchestrator-verified. canonical.py now matches ratified reference (raw UTF-8, NFC, UTF-16 key order, minimal §4 escaping, dup-key-after-NFC hard error). 60/60 tests incl 11 non-ASCII fixtures (decomposed Unicode, CJK, emoji, astral-vs-BMP UTF-16 order, parity vs ser-* goldens). ASCII baseline 31135b85… UNCHANGED. Documented divergence: sim keeps integer number tokens for its INTERNAL content hash (not on-chain); parity defined on number-free payloads. Committed in 26decfd. Discrepancy #2 CLOSED (pending independent verifier non-ASCII confirmation → folded into next verifier task).
+- STEP 3 (architect): DONE + orchestrator-verified. Residual spec edits landed in commit 26decfd (the git-add-A sweep caught architect's FINAL state; git status clean for specs; manifest 74e0bb82/evidence 901b08d5 intact; verifier vectors green). RATIFIED: (A) reward leaf-set shape = aggregate-one-leaf-per-recipient; rank key recipient(BE32) asc then amount asc; recipient unique → no tie-break; zero-sum recipients omitted; §6.6 + reward-policy Stage-2. (B) switchback (phase=cohort_prf&1, arm=(index+phase)%2; forces treated_fraction 500000; carryover/washout are analysis-time only) + matched_cluster (k_s=round_he(frac·m_s/1e6) clamped, members ranked by (prf_u64(full cohort_id),member_index), first k_s treated); composite cohort_id grammar group|index for these 2 designs; §7.4. (C) evidence leaf key confirmed vector-ready §6.5. Wire/hash contract bumped 1.0.0→1.1.0 (additive, hash-compatible); serialization.md §9 revision history.
+- FOLLOW-UPS from architect: (B-notes) switchback schedule policy + matching-quality → causal-eng CONFIRMATION, non-blocking (bytes pinned), fold into causal-eng M3 task. (C-adjacent) multi-batch epoch sub-roots → singular on-chain EvidenceEpoch.{signer_set_root,observations_root} mapping — resolve (architect + solana-program-engineer) before evidence roots post on-chain; does NOT block off-chain evidence-root vectors.
+- P2+P4 verifier: DONE + orchestrator-verified (committed cc03032). verify_vectors.py exit 0, byte-stable. New ratified roots recorded in CONTEXT_HANDOFF read-from-disk: reward-01 a9c35cf4/02 ea943182/03 b882c899 (+ empty, dup-recipient hard error); assign-12 c7a4253f/13 35f6a7f6 (switchback)/14 e67ebfe9/15 a1116ebf (matched_cluster); evidence-01 a13e1cdc/02 e45697c8/03 1010891b (+empty, signer-not-32 hard error). Sim non-ASCII parity independently CONFIRMED → discrepancy #2 fully CLOSED. New reference modules reward.py + evidence.py; assignment.py extended.
+
+**M3 CORE RE-DISPATCHED 2026-07-23 (session 2).** First dispatch (a71719f6/a330baac) died with the
+session — NO output landed on disk (causal-engine/ was still README-only, no evidence-pipeline dir).
+Baseline re-verified green at session start: manifest 74e0bb82…, verify_vectors.py exit 0 (serialization
++ assignment incl switchback/matched_cluster + reward + evidence + adversarial fixtures).
+LESSON: async specialist agents do not survive session end; re-verify their output is ON DISK before
+recording a dispatch as in-flight work.
+M2 devnet item: user chose "do devnet later this session" — still OPEN, still the sole M2 gate item.
+
+**ALL M3 PREREQUISITES (P1-P4) LANDED + VERIFIED. M3 CORE DISPATCH (original 2026-07-23):**
+- backend-data-engineer (a71719f6): evidence pipeline (ingestion, dedup, content-addressed batches, §6.5 evidence roots — must reproduce evidence-0x goldens) + full audit bundle assembler (byte-stable Parquet). Owns bundle structure + participants/assignment/evidence parquet + roots.json + provenance. Off-chain only; on-chain EvidenceEpoch mapping deferred.
+- causal-inference-engineer (a330baac): estimators (cluster-robust SE) + balance/min-sample/sensitivity + reward compiler (Stage-1 conservative LCB max(0,effect-crit*se), no payout under min-sample or <=0; Stage-2 CRP-WS1 split; aggregate-per-recipient leaf-set — must reproduce reward-0x goldens) + analysis.json + rewards.parquet + container digest. Also confirms 2 switchback/matched modeling notes.
+- verifier CLI (task 3): HELD until backend bundle format + causal-eng analysis.json/rewards.parquet defined.
+- C-adjacent evidence-account mapping (architect + solana-program-engineer): TRACKED, resolve before evidence roots post on-chain; not blocking off-chain M3.
+
+**M3 GATE:** clean machine, no network, reproduce result hash + every reward leaf from published bundle; TS & Python verifiers agree; adversarial fixtures rejected. AND M2 devnet item closed (M3 cannot be accepted while open).
 
 **M2 (historical):** Started 2026-07-20.
 
