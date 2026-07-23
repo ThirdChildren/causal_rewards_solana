@@ -37,18 +37,50 @@ M1 — Spec & benchmark (wk 1-4) .............................. DONE (accepted)
     - Simulator: `make determinism` + 2 fresh-process runs -> identical content hash;
       41 tests pass.
 
-M2 — Programs & SDK (wk 5-9) ................................ IN PROGRESS
+M2 — Programs & SDK (wk 5-9) ......... ACCEPTED-PENDING-DEPLOY (NOT done; devnet item still open)
+
+  *** SCOPED GATING EXCEPTION (deliberate, per user 2026-07-23) — read carefully: ***
+  M2 is NOT "done". It is ACCEPTED-PENDING-DEPLOY: every build/verify leg passed locally, but the
+  STATED acceptance path is a devnet deploy, which is still OPEN. This is a deliberate, scoped
+  exception to the CLAUDE.md milestone-gating rule ("do not start a milestone until the prior one's
+  acceptance test passes"). Its limits:
+    - M3 work MAY proceed on: spec, evidence pipeline, causal engine, reward compiler, verifier CLI.
+    - No M3 task may DEPEND on deployed on-chain programs.
+    - No M3 task may be marked COMPLETE on the basis of localnet alone where devnet is the stated
+      acceptance path.
+    - M3 CANNOT be declared accepted while M2's devnet item is still open.
+  DO NOT let a future session read this as "M2 was done."
+
+  SINGLE OUTSTANDING M2 ACCEPTANCE ITEM: devnet deploy (scripts/deploy-devnet.sh) + 18/18 integration
+  re-run against devnet. BLOCKER: funded devnet keypair + RPC. OWNER: user. Everything is ready to run
+  the moment credentials are supplied — ping the user for them at the START of each session until closed.
+
+  Interim confirmation done (localnet, 2026-07-23): scripts/localnet-test.sh -> build + validator +
+  all 4 programs deployed + ts-mocha 18/18 passing, exit 0 (orchestrator ran it directly). Solana
+  toolchain 4.1.1 at ~/.local/share/solana/install/active_release/bin (off PATH; export it to run).
+
+  CODE-COMPLETE; all build/verify legs green:
   Acceptance test: devnet deploy + local integration tests (happy + adversarial)
   + deterministic assignment vectors agreeing across on-chain program, TS SDK, and
   verifier reference. Every program/claim-logic change routed through security-reviewer.
-  Oracle in place: test-vectors/assignment/ (11 cross-impl vectors) + test-vectors/
-  adversarial/ (6 must-reject fixtures: invalid-seed-reveal, dup epoch, replayed batch,
-  stale evaluation, container-digest mismatch, double claim). `verify_vectors.py` exit 0.
-  In progress: solana-program-engineer (4 programs). Held: sdk-engineer (awaits IDL).
-  ERRATUM applied post-freeze: state-machine.md §2 tx4 seed commitment corrected from
-  stale salted prose to the ratified salt-free form (serialization.md §7.2). Prose only,
-  zero hash change, manifest golden still 74e0bb82... Tag spec-v1-frozen stays at its
-  commit; this erratum is a later main commit.
+  DONE + orchestrator-verified:
+    - 4 programs (experiment-registry, evidence-registry, settlement, challenge) + crp-crypto,
+      state-machine v1.1 (adds abort_experiment/refund_bond/mark_aborted). anchor build 0;
+      anchor test 18/18 (agent-reported, re-run at devnet gate). IDLs in idl/.
+    - Security review GO: H1/H2/M1 CLOSED; W1/W2 disclosed + tracked M4 (handoff rows 3-4).
+    - THREE-WAY cross-impl agreement VERIFIED by orchestrator: verifier reference
+      (verify_vectors.py exit 0) == on-chain crp-crypto (cargo test 8/8) == TS SDK
+      (npm test 59 passing, all 11 assignment roots + §6.6 reward leaf). This IS the core
+      M2 acceptance criterion — met.
+    - TS SDK complete: 12+3 instruction clients, 8 account fetchers, claim + assignment-root
+      helpers, example, errors derived from IDL errors[] (drift-proof).
+  REMAINING for M2 done: devnet deploy (needs funded devnet keypair + network) + 18/18
+    integration re-run on-deploy. Needs user devnet wallet/credentials.
+  Oracle: test-vectors/assignment/ (11) + test-vectors/adversarial/ (6 must-reject).
+  Post-freeze errata/migrations on main (tag spec-v1-frozen stays at its commit):
+    - state-machine tx4 salt erratum (salt-free per serialization.md §7.2), prose, no hash change.
+    - state-machine v1.1 (H1/H2/M1 fixes) — protocol-behavior version 1.1.0, wire/hash contract
+      1.0.0 UNCHANGED, manifest golden 74e0bb82... byte-identical.
 
 M3 — Evidence & causal engine (wk 10-14) ................... NOT STARTED
   Acceptance test: independent reproduction of result-artifact hash + reward roots

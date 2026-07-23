@@ -7,7 +7,15 @@ metadata:
 
 # Causal Rewards Protocol MVP — State
 
-**Current milestone:** M2 (Programs & SDK, wk 5–9). Started 2026-07-20. M1 ACCEPTED + spec FROZEN.
+**Current milestone:** M2 ACCEPTED-PENDING-DEPLOY (NOT done — see below) + M3 prerequisites started 2026-07-23.
+
+**M2 ACCEPTED-PENDING-DEPLOY (scoped gating exception, user-approved 2026-07-23):** localnet 18/18 green (orchestrator ran scripts/localnet-test.sh directly — build+validator+deploy+ts-mocha, exit 0; solana 4.1.1 off-PATH at ~/.local/share/solana/install/active_release/bin). Single OPEN acceptance item = devnet deploy + 18/18 re-run; BLOCKER funded devnet keypair+RPC, OWNER user; ping at each session start until closed. LIMITS: M3 may proceed on spec/evidence/engine/compiler/verifier; NO M3 task may depend on deployed programs; NO M3 task complete on localnet-alone where devnet is the acceptance path; M3 cannot be accepted while M2 devnet item open. NOT "done". Full text in CONTEXT_HANDOFF.txt M2 ledger.
+
+**M3 PREREQUISITES (must land before M3 impl that consumes them):**
+- STEP 3 (architect, then verifier vectors): ratify (a) reward leaf_index tie-break when (recipient,amount) non-unique — SDK currently REJECTS, keep until ratified then all 3 impls agree; (b) switchback + matched-cluster assignment derivations (serialization.md §7.4 open) — deterministic + cross-impl vectored like the 11 cluster-randomized roots; (c) confirm evidence Merkle leaf sort key pinned (§6.5, done in discrepancy-1) + vectored before any evidence root. Bump spec version (v1.1/v1.2 migration), record new ratified hashes in handoff read-from-disk.
+- STEP 4 (causal-eng, verifier confirms): fix simulator canonical.py NFC/ensure_ascii divergence (carried discrepancy #2) before sim emits any cross-checked golden hash; verifier confirms with a non-ASCII fixture.
+
+**M2 (historical):** Started 2026-07-20.
 
 **Spec freeze:** git tag `spec-v1-frozen` (annotated, records ratified hashes) at commit 0954bf4eca51e956b642cd50eb2ea225fac98cae, pushed to origin/main. Tag = spec RELEASE discipline; spec changes after = versioned migrations (v1.1/v2), never silent. DISTINCT from freeze-before-reveal runtime invariant. Discrepancy #1 RESOLVED pre-tag (evidence schema conformant + §6.5 leaf sort keys + signer_pubkey len-32); signed off by architect+verifier+backend.
 
@@ -48,7 +56,13 @@ metadata:
 - W2 (economic): dismissed-bond→coordinator collusion incentive. Neutral sink (burn/treasury) before real value. TRACKED for M4 (architect specs sink + program implements). Devnet MVP keeps coordinator-forfeit, DISCLOSED in threat-model §3.4.
 Orchestrator dispatched architect (doc-only) to add threat-model §3.4 collusion row + W1 note now (honest risk disclosure). W1 code + W2 sink deferred to M4 hardening (in CONTEXT_HANDOFF discrepancy table rows 3-4).
 
-**M2 GATE remaining:** SDK 11-root cross-impl agreement (sdk-engineer a1d54f6d running) + devnet deploy & 18/18 integration re-run at gate. Security = GO.
+**sdk-engineer COMPLETE, committed e5161e1 (2026-07-21).** Orchestrator VERIFIED: npm test 59 passing, all 11 assignment roots reproduce (seed commitment + prf + leaf bytes/hash) + §6.6 reward leaf; typecheck/build clean. 12+3 clients, 8 fetchers, claim + assignment-root helpers, example. errors.ts derived from IDL errors[] (drift-proof). Full SDK tracked (25 files). NOTE: earlier git add -A commits swept the crashed-run SDK partials into unrelated commits (c0bbb0f/22b060c) — messy history, final state complete/correct.
+
+**THREE-WAY CROSS-IMPL AGREEMENT VERIFIED (core M2 acceptance criterion — MET):** verifier reference (verify_vectors.py exit 0) == on-chain crp-crypto (cargo test 8/8) == TS SDK (npm test 59, 11/11 roots). All reproduce the 11 golden assignment roots + §6.6 reward leaf.
+
+**M2 STATUS: CODE-COMPLETE, security GO. ONLY remaining gate item = devnet deploy + 18/18 integration re-run — needs funded devnet keypair + network (user credentials). Asked user how to proceed.**
+
+Two SDK-noted M-later residuals (non-blocking): reward leaf_index tie-break when (recipient,amount) non-unique (reward-policy M3 residual; assignLeafIndices rejects rather than guessing); switchback/matched-cluster assignment derivations (§7.4 M2 open item).
 - sdk-engineer: RUNNING (a0b7e100) — TS SDK against IDLs; must reproduce all 11 assignment roots + §6.6 reward leaf (third leg of the cross-impl agreement). Python mirror deferred.
 
 **Salt erratum confirmed needed:** program agent independently flagged the same stale salt in state-machine.md — already fixed (commit 1268cbc). Good corroboration.
