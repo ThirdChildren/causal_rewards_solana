@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crp-evidence"
+version = "0.1.0a0"
+description = "Causal Rewards Protocol — off-chain evidence ingestion, content-addressed batch storage, Merkle roots, and audit-bundle assembly (M3)"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "pyarrow==18.1.0",
+]
+
+[project.optional-dependencies]
+accel = ["cryptography==41.0.7"]
+dev = ["pytest==8.3.4", "cryptography==41.0.7"]
+
+[project.scripts]
+crp-evidence = "crp_evidence.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]

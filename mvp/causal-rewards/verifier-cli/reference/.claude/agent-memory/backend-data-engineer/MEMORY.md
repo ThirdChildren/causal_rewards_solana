@@ -1,1 +1,4 @@
 - [Evidence Merkle scheme (frozen §6.5)](merkle-evidence-scheme.md) — three trees, 32-byte byte-lexicographic sort keys, what the off-chain pipeline must enforce
+- [Bundle layout + Parquet determinism](bundle-layout-and-parquet.md) — layout v1.0.0, two-level determinism, pinned pyarrow writer settings; read before changing serialization
+- [Ingestion dedup semantics](ingestion-dedup-semantics.md) — the tree does not dedup; why the replay key is CJSON(full signed batch), not header_hash
+- [Open spec items (M3)](open-spec-items-m3.md) — participant leaf unpinned, no manifest missingness policy, multi-batch→singular on-chain mapping

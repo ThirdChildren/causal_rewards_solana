@@ -1,0 +1,20 @@
+# Pinned runtime dependencies for the evidence service / audit-bundle assembler (M3).
+#
+# Determinism (CLAUDE.md invariant 2) requires an EXACT environment. These pins are the
+# off-chain half of the committed container digest that verifier-reproducibility-engineer
+# produces. Parquet BYTE-stability is only guaranteed within this pinned environment
+# (pyarrow embeds a "created_by" string carrying its own version). The bundle therefore
+# ALSO carries a parquet-independent `canonical_content_hash` per table (CJSON over the
+# logical rows) so an independent verifier can prove logical equality even if it runs a
+# different pyarrow build. See README.md "Two-level determinism".
+#
+# Versions match simulator/requirements.txt so one container serves both.
+pyarrow==18.1.0
+
+# ed25519 batch-signature verification. The service ships a dependency-free pure-Python
+# RFC-8032 verifier as the reference path; `cryptography` is an OPTIONAL accelerated
+# backend that must agree with it byte-for-byte (tests/test_ed25519.py is the parity gate).
+cryptography==41.0.7
+
+# Test-only:
+pytest==8.3.4
