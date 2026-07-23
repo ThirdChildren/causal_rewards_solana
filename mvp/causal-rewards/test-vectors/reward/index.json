@@ -1,0 +1,30 @@
+{
+  "vectors": [
+    {
+      "name": "reward-01-multi-recipient-ordering",
+      "kind": "reward_positive",
+      "reward_root_hex": "a9c35cf41603d593c123e962f41fc47a2d750cf1e536b177f2454ace647fc171"
+    },
+    {
+      "name": "reward-02-zero-sum-dropped",
+      "kind": "reward_positive",
+      "reward_root_hex": "ea9431826b81982577d70ea8ac6159aa8b600a77889c45c84b2ff5afc8ae0ffc"
+    },
+    {
+      "name": "reward-03-single-recipient",
+      "kind": "reward_positive",
+      "reward_root_hex": "b882c8992309c1269d9e9d6b887faeb2c2361ea112d5c495fe00c520d8655ced"
+    },
+    {
+      "name": "reward-05-empty-all-zero",
+      "kind": "reward_empty",
+      "reward_root_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "reward-04-duplicate-recipient-error",
+      "kind": "reward_duplicate_recipient_error",
+      "expected_result": "reject",
+      "rejection_code": "DUPLICATE_REWARD_RECIPIENT"
+    }
+  ]
+}

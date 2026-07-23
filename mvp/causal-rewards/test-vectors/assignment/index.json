@@ -65,6 +65,30 @@
       "assignment_root_hex": "5ba5cad7ccdb3c614cbb7523ee05055761833073bfdbf2e1cff9b81ddcb3c36c",
       "seed_commitment_hex": "1acb0a5540caacfce6de10367bb8f4efd37051f8bc6dcd6ee08316f5e8196512",
       "exercises": "7 cohorts (odd) exercises odd-node PROMOTION at multiple levels; fixed_count exactly 3 treated"
+    },
+    {
+      "name": "assign-12-switchback-2geo-2period",
+      "assignment_root_hex": "c7a4253f78ed98de6db3c05ad95cf0736ba610c121bd64622c65deb3770e08a8",
+      "seed_commitment_hex": "62cbe8c197fde16e92b7f87308b800f3cdbf6414ac96c694d74cb2437294c945",
+      "exercises": "switchback design: 2 geo-cohorts x 2 periods. Per-geo randomized phase bit + parity alternation across periods; arm flips every period within a geo. treated_fraction_micro MUST be 500000. Leaf carries the FULL composite cohort_id and leaves sort by the FULL id (§7.5/§6.2)."
+    },
+    {
+      "name": "assign-13-switchback-3geo-noncontiguous",
+      "assignment_root_hex": "35f6a7f62061c9e2163a0056286984820d0f00790431c9fee0d45db8c235787c",
+      "seed_commitment_hex": "69e2cc8b9516ab7aee9a1ea8ac343c724ef69aa3270c0995de8108c2aba388cd",
+      "exercises": "switchback with 3 geo-cohorts and NON-CONTIGUOUS period indices (arm is a pure function of (group,index) regardless of gaps). Different seed; odd total leaf count (5) exercises odd-node promotion in the assignment tree."
+    },
+    {
+      "name": "assign-14-matched-pairs-2x2",
+      "assignment_root_hex": "e67ebfe91bdc574095b2c54aa15e03b2320eb22fae638472e52e55b35ab8fdc1",
+      "seed_commitment_hex": "87bef364125c03ec19af00fcc7b48c397b32a0528215c16b318113d1e80b86e7",
+      "exercises": "matched_cluster canonical MATCHED PAIRS: two strata, each m_s=2, treated_fraction_micro=500000 -> k_s=round_he(1.0)=1 (exactly one of each pair treated). Ranked by (full-id prf, member_index)."
+    },
+    {
+      "name": "assign-15-matched-mixed-strata-halfeven",
+      "assignment_root_hex": "a1116ebf57794629d2d983ef0677a6341949f8a9717e4e4f6c368a6cf5d380a0",
+      "seed_commitment_hex": "e9ecd4beca6cf3707acc05db2b6f86e9830aea44abe61a1b62a333a7378293e3",
+      "exercises": "matched_cluster mixed strata exercising round-half-to-EVEN at the exact .5 tie: stratum sA has m_s=3, frac=500000 -> 1.5 -> k_s=2 (q=1 odd -> q+1); stratum sB has m_s=2 -> k_s=1. Proves banker's rounding + clamp, and per-stratum independence."
     }
   ]
 }

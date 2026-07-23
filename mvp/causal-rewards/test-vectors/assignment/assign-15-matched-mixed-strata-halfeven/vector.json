@@ -1,0 +1,183 @@
+{
+  "name": "assign-15-matched-mixed-strata-halfeven",
+  "spec_section": "serialization.md §7.4 (matched_cluster derivation) + §6/§7.5 (assignment tree)",
+  "exercises": "matched_cluster mixed strata exercising round-half-to-EVEN at the exact .5 tie: stratum sA has m_s=3, frac=500000 -> 1.5 -> k_s=2 (q=1 odd -> q+1); stratum sB has m_s=2 -> k_s=1. Proves banker's rounding + clamp, and per-stratum independence.",
+  "inputs": {
+    "experiment_id": "exp-2026-matched-009",
+    "seed_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "cohort_ids": [
+      "sA|0",
+      "sA|1",
+      "sA|2",
+      "sB|0",
+      "sB|1"
+    ],
+    "design": "matched_cluster",
+    "params": {
+      "treated_fraction_micro": "500000"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); frozen BEFORE the seed is revealed",
+    "seed_commitment_hex": "e9ecd4beca6cf3707acc05db2b6f86e9830aea44abe61a1b62a333a7378293e3"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64(FULL composite cohort_id) = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian). Auditable intermediate; the per-design decision input is in the design block.",
+    "values": [
+      {
+        "cohort_id": "sA|0",
+        "prf_u64": "2665137947823154327"
+      },
+      {
+        "cohort_id": "sA|1",
+        "prf_u64": "2455310395497065793"
+      },
+      {
+        "cohort_id": "sA|2",
+        "prf_u64": "2508201129145474742"
+      },
+      {
+        "cohort_id": "sB|0",
+        "prf_u64": "5264820357620390330"
+      },
+      {
+        "cohort_id": "sB|1",
+        "prf_u64": "10965850353301931900"
+      }
+    ]
+  },
+  "step2b_matched_cluster_derivation": {
+    "note": "per stratum s: k_s = round_half_even(frac * m_s / 1e6) clamped [0,m_s]; rank members ascending by (prf_u64(FULL id), member_index); first k_s -> treatment.",
+    "treated_fraction_micro": "500000",
+    "per_stratum": [
+      {
+        "group": "sA",
+        "m_s": "3",
+        "frac_times_m_s": "1500000",
+        "k_s": "2",
+        "ranked_members": [
+          {
+            "rank": "0",
+            "cohort_id": "sA|1",
+            "member_index": "1",
+            "prf_u64": "2455310395497065793",
+            "arm": "treatment"
+          },
+          {
+            "rank": "1",
+            "cohort_id": "sA|2",
+            "member_index": "2",
+            "prf_u64": "2508201129145474742",
+            "arm": "treatment"
+          },
+          {
+            "rank": "2",
+            "cohort_id": "sA|0",
+            "member_index": "0",
+            "prf_u64": "2665137947823154327",
+            "arm": "control"
+          }
+        ]
+      },
+      {
+        "group": "sB",
+        "m_s": "2",
+        "frac_times_m_s": "1000000",
+        "k_s": "1",
+        "ranked_members": [
+          {
+            "rank": "0",
+            "cohort_id": "sB|0",
+            "member_index": "0",
+            "prf_u64": "5264820357620390330",
+            "arm": "treatment"
+          },
+          {
+            "rank": "1",
+            "cohort_id": "sB|1",
+            "member_index": "1",
+            "prf_u64": "10965850353301931900",
+            "arm": "control"
+          }
+        ]
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "3",
+    "control_count": "2"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "FULL composite cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "sA|0",
+        "arm": "control",
+        "prf_u64": "2665137947823154327",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "sA|0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"sA|0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2273417c30227d",
+        "leaf_hash_hex": "6311309b0a9ffd76993ba1e59a3784838d38844de63b2ee88e0f81ae3bfa5d92"
+      },
+      {
+        "cohort_id": "sA|1",
+        "arm": "treatment",
+        "prf_u64": "2455310395497065793",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "sA|1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"sA|1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a2273417c31227d",
+        "leaf_hash_hex": "5347a65ffd598816eb45095d4785170fd5a2be2fc6e990456043d44f7b852b44"
+      },
+      {
+        "cohort_id": "sA|2",
+        "arm": "treatment",
+        "prf_u64": "2508201129145474742",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "sA|2"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"sA|2\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a2273417c32227d",
+        "leaf_hash_hex": "00957f26b2f237c2d07e4d304d93b276ff00ca0db4fcd0ad1cf193e39724cd30"
+      },
+      {
+        "cohort_id": "sB|0",
+        "arm": "treatment",
+        "prf_u64": "5264820357620390330",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "sB|0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"sB|0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a2273427c30227d",
+        "leaf_hash_hex": "c54aec266e2b748d71fdcb7b3afc9cf2bb72029a3c1188342b48f4672bfc9df3"
+      },
+      {
+        "cohort_id": "sB|1",
+        "arm": "control",
+        "prf_u64": "10965850353301931900",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "sB|1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"sB|1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2273427c31227d",
+        "leaf_hash_hex": "d1619e8567c108066f6099af029fb31ee5d66ab148481e829eb008c5b48c7c08"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "a1116ebf57794629d2d983ef0677a6341949f8a9717e4e4f6c368a6cf5d380a0"
+  }
+}

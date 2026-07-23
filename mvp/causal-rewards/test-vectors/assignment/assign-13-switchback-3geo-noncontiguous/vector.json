@@ -1,0 +1,189 @@
+{
+  "name": "assign-13-switchback-3geo-noncontiguous",
+  "spec_section": "serialization.md §7.4 (switchback derivation) + §6/§7.5 (assignment tree)",
+  "exercises": "switchback with 3 geo-cohorts and NON-CONTIGUOUS period indices (arm is a pure function of (group,index) regardless of gaps). Different seed; odd total leaf count (5) exercises odd-node promotion in the assignment tree.",
+  "inputs": {
+    "experiment_id": "exp-2026-switchback-007",
+    "seed_hex": "a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
+    "cohort_ids": [
+      "geo-a|0",
+      "geo-a|2",
+      "geo-a|5",
+      "geo-b|1",
+      "geo-c|0"
+    ],
+    "design": "switchback",
+    "params": {
+      "treated_fraction_micro": "500000"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); frozen BEFORE the seed is revealed",
+    "seed_commitment_hex": "69e2cc8b9516ab7aee9a1ea8ac343c724ef69aa3270c0995de8108c2aba388cd"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64(FULL composite cohort_id) = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian). Auditable intermediate; the per-design decision input is in the design block.",
+    "values": [
+      {
+        "cohort_id": "geo-a|0",
+        "prf_u64": "11931632931197963066"
+      },
+      {
+        "cohort_id": "geo-a|2",
+        "prf_u64": "17073643068364635652"
+      },
+      {
+        "cohort_id": "geo-a|5",
+        "prf_u64": "1353340218296816028"
+      },
+      {
+        "cohort_id": "geo-b|1",
+        "prf_u64": "16423745223432417208"
+      },
+      {
+        "cohort_id": "geo-c|0",
+        "prf_u64": "11355405398681855357"
+      }
+    ]
+  },
+  "step2b_switchback_derivation": {
+    "note": "phase(group) = prf_u64(group) & 1; arm = treatment iff (index + phase) % 2 == 1. treated_fraction_micro MUST be '500000' (asserted, not read by the derivation).",
+    "treated_fraction_micro_asserted": "500000",
+    "per_group_phase": [
+      {
+        "group": "geo-a",
+        "group_prf_u64": "3212095796606653289",
+        "phase": "1"
+      },
+      {
+        "group": "geo-b",
+        "group_prf_u64": "17459106422673278616",
+        "phase": "0"
+      },
+      {
+        "group": "geo-c",
+        "group_prf_u64": "6213798146144660064",
+        "phase": "0"
+      }
+    ],
+    "per_unit_arm": [
+      {
+        "cohort_id": "geo-a|0",
+        "group": "geo-a",
+        "index": "0",
+        "phase": "1",
+        "index_plus_phase_mod2": "1",
+        "arm": "treatment"
+      },
+      {
+        "cohort_id": "geo-a|2",
+        "group": "geo-a",
+        "index": "2",
+        "phase": "1",
+        "index_plus_phase_mod2": "1",
+        "arm": "treatment"
+      },
+      {
+        "cohort_id": "geo-a|5",
+        "group": "geo-a",
+        "index": "5",
+        "phase": "1",
+        "index_plus_phase_mod2": "0",
+        "arm": "control"
+      },
+      {
+        "cohort_id": "geo-b|1",
+        "group": "geo-b",
+        "index": "1",
+        "phase": "0",
+        "index_plus_phase_mod2": "1",
+        "arm": "treatment"
+      },
+      {
+        "cohort_id": "geo-c|0",
+        "group": "geo-c",
+        "index": "0",
+        "phase": "0",
+        "index_plus_phase_mod2": "0",
+        "arm": "control"
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "3",
+    "control_count": "2"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "FULL composite cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "geo-a|0",
+        "arm": "treatment",
+        "prf_u64": "3212095796606653289",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "geo-a|0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"geo-a|0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a2267656f2d617c30227d",
+        "leaf_hash_hex": "8e6cda60d1f1e55a396973d0c5f40191ff699cb9b846919b1f58d062b79b2021"
+      },
+      {
+        "cohort_id": "geo-a|2",
+        "arm": "treatment",
+        "prf_u64": "3212095796606653289",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "geo-a|2"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"geo-a|2\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a2267656f2d617c32227d",
+        "leaf_hash_hex": "6a7bb6f57fc8c3efa1073bc874b6c1e221bbc82568e118107f842d509519017a"
+      },
+      {
+        "cohort_id": "geo-a|5",
+        "arm": "control",
+        "prf_u64": "3212095796606653289",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "geo-a|5"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"geo-a|5\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2267656f2d617c35227d",
+        "leaf_hash_hex": "3f32b8cdb82501db1ababcf7434e0d30d213786757a5b876e2871bfaefd430c7"
+      },
+      {
+        "cohort_id": "geo-b|1",
+        "arm": "treatment",
+        "prf_u64": "17459106422673278616",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "geo-b|1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"geo-b|1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a2267656f2d627c31227d",
+        "leaf_hash_hex": "5f8248fbce31e735d2e4c29d1484ecdef687ae4897dfe076cdafd55aa9b9dfce"
+      },
+      {
+        "cohort_id": "geo-c|0",
+        "arm": "control",
+        "prf_u64": "6213798146144660064",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "geo-c|0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"geo-c|0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a2267656f2d637c30227d",
+        "leaf_hash_hex": "9d28d71fe38ef1a257f732bf3f2e48a654737941f29b95e7ca959ff075e590dc"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "35f6a7f62061c9e2163a0056286984820d0f00790431c9fee0d45db8c235787c"
+  }
+}

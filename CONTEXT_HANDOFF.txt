@@ -126,6 +126,30 @@ Source file: mvp/causal-rewards/test-vectors/assignment/index.json
                             seed_commitment=e2f5ee3ae684b7fef4639a71a9f3318c792a8c2f21b8df349ffcb6d035fb884c
   assign-03-bernoulli-p25   root=c463b3f14f812250b67cfbf3f1f33a5804434759d89c0d7469234a5c9e3b9f56
                             seed_commitment=59852177fe866b8ae83912b8bcebf804279d51308cadd69275aed091abe2d0b3
+  (assign-04..11 boundary/lexical/promotion cases also in index.json — M2 cross-impl set.)
+
+Source file: mvp/causal-rewards/test-vectors/assignment/index.json (v1.1 designs — switchback + matched_cluster, ratified 2026-07-23)
+  assign-12-switchback-2geo-2period          root=c7a4253f78ed98de6db3c05ad95cf0736ba610c121bd64622c65deb3770e08a8
+  assign-13-switchback-3geo-noncontiguous    root=35f6a7f62061c9e2163a0056286984820d0f00790431c9fee0d45db8c235787c
+  assign-14-matched-pairs-2x2                root=e67ebfe91bdc574095b2c54aa15e03b2320eb22fae638472e52e55b35ab8fdc1
+  assign-15-matched-mixed-strata-halfeven    root=a1116ebf57794629d2d983ef0677a6341949f8a9717e4e4f6c368a6cf5d380a0
+
+Source file: mvp/causal-rewards/test-vectors/reward/index.json (v1.1 §6.6 aggregate-per-recipient, ratified 2026-07-23)
+  reward-01-multi-recipient-ordering  root=a9c35cf41603d593c123e962f41fc47a2d750cf1e536b177f2454ace647fc171
+  reward-02-zero-sum-dropped          root=ea9431826b81982577d70ea8ac6159aa8b600a77889c45c84b2ff5afc8ae0ffc
+  reward-03-single-recipient          root=b882c8992309c1269d9e9d6b887faeb2c2361ea112d5c495fe00c520d8655ced
+  reward-05-empty-all-zero            root=0000000000000000000000000000000000000000000000000000000000000000
+  reward-04-duplicate-recipient       = HARD ERROR DUPLICATE_REWARD_RECIPIENT (compiler-bug guard)
+
+Source file: mvp/causal-rewards/test-vectors/evidence/index.json (v1.1 §6.5 off-chain evidence trees, ratified 2026-07-23)
+  evidence-01-epoch-multibatch        root=a13e1cdc8702252b89ab08b6943ae82bc65325c2bbce119211a270abc87deeb2
+  evidence-02-signer-set-multisigner  root=e45697c86d48d63b8c25a975224344060a4b5cf72bd7d00b3364b6247e5fd52e
+  evidence-03-observation-set         root=1010891bf501f89b96db447a295d0820c20ad694afdcff4cf5c0c2e368ebaf56
+  evidence-04-empty-tree              root=0000000000000000000000000000000000000000000000000000000000000000
+  evidence-05-signer-not-32           = HARD ERROR SIGNER_PUBKEY_NOT_32_BYTES
+  NOTE: these are OFF-CHAIN evidence roots. Mapping to the singular on-chain
+  EvidenceEpoch.{signer_set_root,observations_root} for a multi-batch epoch is a SEPARATE
+  open item (architect + solana-program-engineer) — resolve before evidence roots post on-chain.
 
 Simulator baseline content hash (NOT a spec golden; internal reproducibility check):
   31135b85f4c18e4022b58f7d0dbfa1ef018990b29990b331a0048104e165dc67

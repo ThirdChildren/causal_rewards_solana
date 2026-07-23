@@ -1,0 +1,22 @@
+{
+  "name": "reward-05-empty-all-zero",
+  "kind": "reward_empty",
+  "spec_section": "serialization.md §6.6 + §6.4 (empty tree)",
+  "exercises": "fully-null distribution: every recipient's aggregate is 0, so ALL are dropped -> empty leaf set -> reward_root = 32 zero bytes (§6.4). finalize_distribution then locks a zero root and the whole budget is recoverable.",
+  "inputs": {
+    "contributions": [
+      {
+        "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "cohort_id": "cohort-A",
+        "amount_base_units": "0"
+      },
+      {
+        "recipient_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "cohort_id": "cohort-A",
+        "amount_base_units": "0"
+      }
+    ]
+  },
+  "leaves": [],
+  "reward_root_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+}

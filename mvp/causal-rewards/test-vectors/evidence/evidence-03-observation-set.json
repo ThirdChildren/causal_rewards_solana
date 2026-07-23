@@ -1,0 +1,40 @@
+{
+  "name": "evidence-03-observation-set",
+  "kind": "evidence_observation_set",
+  "spec_section": "serialization.md §6.5 (observation sub-commitment; leaf domain 'obs')",
+  "exercises": "observation sub-commitment over 4 per-observation content commitments (32 raw bytes each from payload_commitment_hex ^[0-9a-f]{64}$), sorted ASCENDING by the 32-byte commitment (BE). Includes a tight adjacent pair (0x40 10.. vs 0x40 11..) to exercise byte-lexicographic ordering.",
+  "leaf_hash_formula": "SHA-256(0x00 || 'obs' || observation_commitment_be32)",
+  "node_hash_formula": "SHA-256(0x01 || left || right)",
+  "sort_key": "observation_commitment_be32 ascending (duplicate -> hard error)",
+  "inputs": {
+    "payload_commitment_hexes": [
+      "7000000000000000000000000000000000000000000000000000000000000000",
+      "0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "4011111111111111111111111111111111111111111111111111111111111111",
+      "4010101010101010101010101010101010101010101010101010101010101010"
+    ]
+  },
+  "ordered_leaves": [
+    {
+      "position": 0,
+      "sort_key_be32_hex": "0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "leaf_hash_hex": "3732e4a5dce13c59255f6cc92bfd4fc4569a29db0ea81ebe906dd0bb7abe3ecd"
+    },
+    {
+      "position": 1,
+      "sort_key_be32_hex": "4010101010101010101010101010101010101010101010101010101010101010",
+      "leaf_hash_hex": "eeb792649f9b2f0e78c799598fe350a1d99c7ba82c437f2a108c64e3d342ee99"
+    },
+    {
+      "position": 2,
+      "sort_key_be32_hex": "4011111111111111111111111111111111111111111111111111111111111111",
+      "leaf_hash_hex": "b49ef9e45ec06550ba8c18729763acd08510d57bff48ae95bf1d84d866e99a93"
+    },
+    {
+      "position": 3,
+      "sort_key_be32_hex": "7000000000000000000000000000000000000000000000000000000000000000",
+      "leaf_hash_hex": "6be6fd0d0483e1fab8a85f0c390ea904262e352c06e40b7a1f9ebb13b8b1d500"
+    }
+  ],
+  "observations_root_hex": "1010891bf501f89b96db447a295d0820c20ad694afdcff4cf5c0c2e368ebaf56"
+}

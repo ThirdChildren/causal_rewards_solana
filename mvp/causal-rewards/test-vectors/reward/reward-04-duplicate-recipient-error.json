@@ -1,0 +1,23 @@
+{
+  "name": "reward-04-duplicate-recipient-error",
+  "kind": "reward_duplicate_recipient_error",
+  "spec_section": "serialization.md §6.6 (recipient is a UNIQUE key after aggregation)",
+  "exercises": "compiler-bug guard: a reward leaf set containing TWO leaves with the same recipient is a HARD ERROR (recipient is a unique key; the SDK's reject-on-ambiguity must fire). Demonstrates the verifier REJECTS malformed compiler output rather than silently building a tree.",
+  "expected_result": "reject",
+  "rejection_code": "DUPLICATE_REWARD_RECIPIENT",
+  "why_rejected": "After aggregate-one-leaf-per-recipient, `recipient` is a unique primary key; two leaves sharing it can only be a compiler bug and would also collide the per-experiment ClaimReceipt nullifier PDA.",
+  "inputs": {
+    "malformed_leaf_set": [
+      {
+        "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "amount_base_units": "10",
+        "leaf_index": "0"
+      },
+      {
+        "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "amount_base_units": "20",
+        "leaf_index": "1"
+      }
+    ]
+  }
+}

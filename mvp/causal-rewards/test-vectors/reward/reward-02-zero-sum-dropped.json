@@ -1,0 +1,53 @@
+{
+  "name": "reward-02-zero-sum-dropped",
+  "kind": "reward_positive",
+  "spec_section": "serialization.md §6.6 + reward-policy.md Stage 2 (aggregate-one-leaf-per-recipient)",
+  "exercises": "a recipient whose aggregate sum is 0 (its only contribution is 0) is OMITTED from the leaf set and does NOT consume a leaf_index — even though its recipient BE32 sorts BETWEEN the two surviving leaves. Confirms zero-sum omission.",
+  "leaf_hash_formula": "SHA-256(0x00 || 'CRP:reward:v1' || recipient(32) || amount_base_units(u64 BE) || leaf_index(u64 BE))",
+  "node_hash_formula": "SHA-256(0x01 || left || right)",
+  "ordering": "aggregate Σ over cohorts per recipient; DROP zero-sum recipients; rank ascending by recipient(BE32, unique key) then amount_base_units; leaf_index = 0-based rank; leaves placed by leaf_index contiguous from 0",
+  "inputs": {
+    "contributions": [
+      {
+        "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "cohort_id": "cohort-A",
+        "amount_base_units": "40"
+      },
+      {
+        "recipient_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "cohort_id": "cohort-A",
+        "amount_base_units": "0"
+      },
+      {
+        "recipient_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "cohort_id": "cohort-B",
+        "amount_base_units": "10"
+      }
+    ]
+  },
+  "aggregate_recipient_amount_map": {
+    "1111111111111111111111111111111111111111111111111111111111111111": "40",
+    "3333333333333333333333333333333333333333333333333333333333333333": "0",
+    "4444444444444444444444444444444444444444444444444444444444444444": "10"
+  },
+  "dropped_zero_sum_recipients_hex": [
+    "3333333333333333333333333333333333333333333333333333333333333333"
+  ],
+  "leaves": [
+    {
+      "leaf_index": "0",
+      "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "amount_base_units": "40",
+      "leaf_content_hex": "111111111111111111111111111111111111111111111111111111111111111100000000000000280000000000000000",
+      "leaf_hash_hex": "b5713e56ac7987b2cd4c17fac281adf49304def4b8419182b4ec100069a22b80"
+    },
+    {
+      "leaf_index": "1",
+      "recipient_hex": "4444444444444444444444444444444444444444444444444444444444444444",
+      "amount_base_units": "10",
+      "leaf_content_hex": "4444444444444444444444444444444444444444444444444444444444444444000000000000000a0000000000000001",
+      "leaf_hash_hex": "5edc925640c72d427cfa20245921d897f4ffde5bd8d7dc593211535fcf2f3624"
+    }
+  ],
+  "reward_root_hex": "ea9431826b81982577d70ea8ac6159aa8b600a77889c45c84b2ff5afc8ae0ffc"
+}

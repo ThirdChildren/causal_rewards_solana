@@ -37,8 +37,9 @@ Designs:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from canonical import canonical_json_bytes, sha256
 
@@ -54,6 +55,9 @@ __all__ = [
     "assignment_leaf_object",
     "assignment_leaf_bytes",
     "CohortAssignment",
+    "parse_composite_cohort_id",
+    "round_half_even_div",
+    "switchback_phase",
 ]
 
 SEED_LEN = 32
@@ -95,6 +99,57 @@ def cohort_prf(seed: bytes, experiment_id: str, cohort_id: str) -> int:
     return int.from_bytes(digest[:8], "big")
 
 
+_INDEX_RE = re.compile(r"^(0|[1-9][0-9]*)$")
+
+
+def parse_composite_cohort_id(cohort_id: str) -> Tuple[str, int]:
+    """Parse a switchback/matched_cluster composite id ``group "|" index`` (§7.4 grammar).
+
+    The single ``|`` (U+007C) MUST appear EXACTLY once; ``group`` is one or more
+    non-``|`` characters; ``index`` is a canonical unsigned integer string
+    (``^(0|[1-9][0-9]*)$`` — no leading zeros). Any violation is a hard error,
+    rejected before derivation. The FULL composite id is still what the leaf
+    carries and what leaves sort by (§6.2/§7.5); this parse only reads structure
+    OUT of the id for the derivation.
+    """
+    parts = cohort_id.split("|")
+    if len(parts) != 2:
+        raise ValueError(
+            "composite cohort_id must contain EXACTLY one '|': %r" % (cohort_id,)
+        )
+    group, index = parts
+    if group == "":
+        raise ValueError("composite cohort_id has empty group: %r" % (cohort_id,))
+    if not _INDEX_RE.match(index):
+        raise ValueError(
+            "composite cohort_id index is not a canonical uint string: %r" % (cohort_id,)
+        )
+    return group, int(index)
+
+
+def round_half_even_div(numerator: int, denominator: int) -> int:
+    """Integer round-half-to-even of ``numerator / denominator`` (§2.4 sole rounding rule).
+
+    ``q = N // D``, ``r = N mod D``: take ``q`` if ``2r < D``, ``q+1`` if
+    ``2r > D``, and on the exact half ``2r == D`` take ``q`` when ``q`` is even
+    else ``q+1``. Denominator MUST be positive.
+    """
+    if denominator <= 0:
+        raise ValueError("denominator must be positive")
+    q, r = divmod(numerator, denominator)
+    two_r = 2 * r
+    if two_r < denominator:
+        return q
+    if two_r > denominator:
+        return q + 1
+    return q if (q % 2 == 0) else q + 1
+
+
+def switchback_phase(seed: bytes, experiment_id: str, group: str) -> int:
+    """Per-geo-cohort switchback phase bit = low bit of the §7.3 PRF keyed on ``group``."""
+    return cohort_prf(seed, experiment_id, group) & 1
+
+
 @dataclass(frozen=True)
 class CohortAssignment:
     cohort_id: str
@@ -117,7 +172,11 @@ def derive_assignment(
     if len(set(cohort_ids)) != len(cohort_ids):
         raise ValueError("duplicate cohort_id in cohort set")
 
+    # Full-composite-id PRF for every cohort (used by fixed_count and
+    # matched_cluster ranking, and by bernoulli). `prf_used` is what each
+    # cohort's arm decision actually consumed and what the leaf table reports.
     prf = {cid: cohort_prf(seed, experiment_id, cid) for cid in cohort_ids}
+    prf_used = dict(prf)
 
     if design == "bernoulli":
         ppm = int(params["treat_fraction_ppm"])
@@ -131,13 +190,53 @@ def derive_assignment(
         ranked = sorted(cohort_ids, key=lambda cid: (prf[cid], cid))
         treated = set(ranked[:k])
         arm = {cid: (ARM_TREATMENT if cid in treated else ARM_CONTROL) for cid in cohort_ids}
+    elif design == "switchback":
+        # §7.4 switchback: per-geo phase bit + parity alternation across periods.
+        # `treated_fraction_micro` MUST be "500000" (structurally 50/50); the
+        # derivation itself does NOT read it — it only asserts the manifest value.
+        tf = params["treated_fraction_micro"]
+        if tf != "500000":
+            raise ValueError(
+                "switchback requires treated_fraction_micro == '500000', got %r" % (tf,)
+            )
+        phase: Dict[str, int] = {}
+        arm = {}
+        for cid in cohort_ids:
+            group, index = parse_composite_cohort_id(cid)
+            if group not in phase:
+                phase[group] = switchback_phase(seed, experiment_id, group)
+            prf_used[cid] = cohort_prf(seed, experiment_id, group)  # the group PRF
+            arm[cid] = (
+                ARM_TREATMENT if ((index + phase[group]) % 2 == 1) else ARM_CONTROL
+            )
+    elif design == "matched_cluster":
+        # §7.4 matched_cluster: within each frozen stratum, k_s = round_he(
+        # treated_fraction_micro * m_s / 1e6) treated, ranked by (full-id PRF,
+        # member_index). Reuses the §7.3 PRF keyed on the FULL composite id.
+        frac = int(params["treated_fraction_micro"])
+        if not (0 <= frac <= _PPM):
+            raise ValueError("treated_fraction_micro out of range: %d" % frac)
+        strata: Dict[str, List[Tuple[int, int, str]]] = {}
+        for cid in cohort_ids:
+            group, index = parse_composite_cohort_id(cid)
+            # rank tuple: (prf_u64 of FULL id, member_index) — index breaks prf ties
+            strata.setdefault(group, []).append((prf[cid], index, cid))
+        arm = {}
+        for group, members in strata.items():
+            m_s = len(members)
+            k_s = round_half_even_div(frac * m_s, _PPM)
+            k_s = max(0, min(k_s, m_s))  # clamp to [0, m_s]
+            ranked = sorted(members, key=lambda t: (t[0], t[1]))
+            for pos, (_prf, _idx, cid) in enumerate(ranked):
+                arm[cid] = ARM_TREATMENT if pos < k_s else ARM_CONTROL
     else:
         raise ValueError("unknown design: %r" % (design,))
 
-    # Canonical leaf order: cohort_id ascending by UTF-16 code unit (matches
-    # canonical JSON key ordering used everywhere else).
+    # Canonical leaf order: FULL composite cohort_id ascending by UTF-16 code
+    # unit (matches canonical JSON key ordering; the grammar never changes the
+    # leaf form or leaf ordering — §7.4).
     ordered = sorted(cohort_ids, key=lambda cid: cid.encode("utf-16-be"))
-    return [CohortAssignment(cid, arm[cid], prf[cid]) for cid in ordered]
+    return [CohortAssignment(cid, arm[cid], prf_used[cid]) for cid in ordered]
 
 
 def assignment_leaf_object(a: CohortAssignment) -> dict:

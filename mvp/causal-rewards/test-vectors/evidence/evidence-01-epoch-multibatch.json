@@ -1,0 +1,147 @@
+{
+  "name": "evidence-01-epoch-multibatch",
+  "kind": "evidence_epoch",
+  "spec_section": "serialization.md §6.5 (evidence epoch tree; DOMAIN 'CRP:evidence:v1')",
+  "exercises": "multi-batch epoch: 3 signed batch headers, leaf = CJSON(batch) (incl. batch_signature), ordered ASCENDING by leaf_hash before building the tree. Input order is NOT insertion order — the tree is data-derived.",
+  "leaf_hash_formula": "SHA-256(0x00 || 'CRP:evidence:v1' || CJSON(batch))",
+  "node_hash_formula": "SHA-256(0x01 || left || right)",
+  "sort_key": "leaf_hash ascending (byte-identical batch -> hard error)",
+  "inputs": {
+    "batches": [
+      {
+        "spec_version": "1.0.0",
+        "experiment_id": "env-sensors-pilot-001",
+        "epoch_index": "0",
+        "cohort_id": "cohort-x",
+        "time_range": {
+          "start": "1721001600",
+          "end": "1721088000"
+        },
+        "signer_set_commitment": {
+          "algo": "sha256",
+          "merkle_root_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "signer_count": "3",
+          "leaf_scheme": "sha256(0x00||'signer'||signer_pubkey_be32)"
+        },
+        "observations_commitment": {
+          "algo": "sha256",
+          "merkle_root_hex": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          "leaf_count": "4",
+          "leaf_scheme": "sha256(0x00||'obs'||observation_commitment_be32)"
+        },
+        "aggregate_summary": {
+          "accepted_count": "100",
+          "rejected_count": "2",
+          "distinct_signers": "3"
+        },
+        "batch_signature": {
+          "algo": "ed25519",
+          "signer_pubkey": "oqtkwi1j2wZuJSh74CMk7wk77nFUQDt1Qhf3Liweew9",
+          "header_hash_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signature_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      {
+        "spec_version": "1.0.0",
+        "experiment_id": "env-sensors-pilot-001",
+        "epoch_index": "0",
+        "cohort_id": "cohort-y",
+        "time_range": {
+          "start": "1721088000",
+          "end": "1721174400"
+        },
+        "signer_set_commitment": {
+          "algo": "sha256",
+          "merkle_root_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "signer_count": "3",
+          "leaf_scheme": "sha256(0x00||'signer'||signer_pubkey_be32)"
+        },
+        "observations_commitment": {
+          "algo": "sha256",
+          "merkle_root_hex": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          "leaf_count": "4",
+          "leaf_scheme": "sha256(0x00||'obs'||observation_commitment_be32)"
+        },
+        "aggregate_summary": {
+          "accepted_count": "100",
+          "rejected_count": "2",
+          "distinct_signers": "3"
+        },
+        "batch_signature": {
+          "algo": "ed25519",
+          "signer_pubkey": "oqtkwi1j2wZuJSh74CMk7wk77nFUQDt1Qhf3Liweew9",
+          "header_hash_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "signature_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      {
+        "spec_version": "1.0.0",
+        "experiment_id": "env-sensors-pilot-001",
+        "epoch_index": "0",
+        "cohort_id": "cohort-z",
+        "time_range": {
+          "start": "1721174400",
+          "end": "1721260800"
+        },
+        "signer_set_commitment": {
+          "algo": "sha256",
+          "merkle_root_hex": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "signer_count": "3",
+          "leaf_scheme": "sha256(0x00||'signer'||signer_pubkey_be32)"
+        },
+        "observations_commitment": {
+          "algo": "sha256",
+          "merkle_root_hex": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          "leaf_count": "4",
+          "leaf_scheme": "sha256(0x00||'obs'||observation_commitment_be32)"
+        },
+        "aggregate_summary": {
+          "accepted_count": "100",
+          "rejected_count": "2",
+          "distinct_signers": "3"
+        },
+        "batch_signature": {
+          "algo": "ed25519",
+          "signer_pubkey": "oqtkwi1j2wZuJSh74CMk7wk77nFUQDt1Qhf3Liweew9",
+          "header_hash_hex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "signature_hex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    ]
+  },
+  "unsorted_leaf_hashes": [
+    {
+      "cohort_id": "cohort-x",
+      "leaf_canonical_bytes_len": "1188",
+      "leaf_hash_hex": "bed4e141a4b0e055433c16f285e9f76e2d282c480507014248b90b3599894274"
+    },
+    {
+      "cohort_id": "cohort-y",
+      "leaf_canonical_bytes_len": "1188",
+      "leaf_hash_hex": "d2b1c16d2511aa57ccf866ce3a0b2e4a93bd061ecfdfe9663c53862d45d46a62"
+    },
+    {
+      "cohort_id": "cohort-z",
+      "leaf_canonical_bytes_len": "1188",
+      "leaf_hash_hex": "25dd3bc549e4eb4655e1afde2059be26f0e1faa175bbbcc8d92095eddb859517"
+    }
+  ],
+  "ordered_leaves": [
+    {
+      "position": 0,
+      "leaf_canonical_bytes_len": "1188",
+      "leaf_hash_hex": "25dd3bc549e4eb4655e1afde2059be26f0e1faa175bbbcc8d92095eddb859517"
+    },
+    {
+      "position": 1,
+      "leaf_canonical_bytes_len": "1188",
+      "leaf_hash_hex": "bed4e141a4b0e055433c16f285e9f76e2d282c480507014248b90b3599894274"
+    },
+    {
+      "position": 2,
+      "leaf_canonical_bytes_len": "1188",
+      "leaf_hash_hex": "d2b1c16d2511aa57ccf866ce3a0b2e4a93bd061ecfdfe9663c53862d45d46a62"
+    }
+  ],
+  "evidence_epoch_root_hex": "a13e1cdc8702252b89ab08b6943ae82bc65325c2bbce119211a270abc87deeb2"
+}

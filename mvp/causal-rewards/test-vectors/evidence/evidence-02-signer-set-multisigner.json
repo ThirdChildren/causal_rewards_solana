@@ -1,0 +1,40 @@
+{
+  "name": "evidence-02-signer-set-multisigner",
+  "kind": "evidence_signer_set",
+  "spec_section": "serialization.md §6.5 (signer set sub-commitment; leaf domain 'signer')",
+  "exercises": "signer-set sub-commitment over 4 ed25519 signer pubkeys. Each signer_pubkey is base58-decoded to EXACTLY 32 bytes (hard error otherwise), sorted ASCENDING by the 32-byte pubkey (BE), then hashed. Input order != sorted.",
+  "leaf_hash_formula": "SHA-256(0x00 || 'signer' || signer_pubkey_be32)",
+  "node_hash_formula": "SHA-256(0x01 || left || right)",
+  "sort_key": "signer_pubkey_be32 ascending (duplicate pubkey -> hard error)",
+  "inputs": {
+    "signer_pubkeys_base58": [
+      "4ENa2mq3u8mGcCmmRDnRyUmyRU7ztbtX2dodAMtmbcjZ",
+      "LX3EUdRUBUa3TbsYXLEUdj9J3prXkWXvLYSWyYyc2Jj",
+      "BJFNun1ujvkEVqQ4qCkJyn2ybVSw2MaiLiBs1qUGH69m",
+      "6PHcid3kVtc7gLcwhNJid8dHhnCfV19XiPg3GbpcfMtb"
+    ]
+  },
+  "ordered_leaves": [
+    {
+      "position": 0,
+      "sort_key_be32_hex": "0500000000000000000000000000000000000000000000000000000000000000",
+      "leaf_hash_hex": "2756dd388073961a2b635a674d4180e9cbbcaed092f4108b489ab28bb920b6e2"
+    },
+    {
+      "position": 1,
+      "sort_key_be32_hex": "3000000000000000000000000000000000000000000000000000000000000000",
+      "leaf_hash_hex": "25af9f74009a26b1e5d494e7ad51095653ef92925bd1a02731b410ea8ae1fb3e"
+    },
+    {
+      "position": 2,
+      "sort_key_be32_hex": "5000000000000000000000000000000000000000000000000000000000000000",
+      "leaf_hash_hex": "745c51d0fdeeb7d0446e97275a590da3e4f9085f16271169f6d238218b43fd8e"
+    },
+    {
+      "position": 3,
+      "sort_key_be32_hex": "9900000000000000000000000000000000000000000000000000000000000000",
+      "leaf_hash_hex": "ae12f056bbc22ef0ad6f534853e16dcca7cca143990df1eb1c28f1ffd80616ac"
+    }
+  ],
+  "signer_set_root_hex": "e45697c86d48d63b8c25a975224344060a4b5cf72bd7d00b3364b6247e5fd52e"
+}

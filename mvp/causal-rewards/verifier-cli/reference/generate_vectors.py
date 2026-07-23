@@ -20,8 +20,13 @@ from assignment import (
     assignment_leaf_object,
     cohort_prf,
     derive_assignment,
+    parse_composite_cohort_id,
+    round_half_even_div,
     seed_commitment,
+    switchback_phase,
 )
+import reward as reward_mod
+import evidence as evidence_mod
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TV = os.path.abspath(os.path.join(HERE, "..", "..", "test-vectors"))
@@ -362,7 +367,258 @@ def gen_assignment() -> None:
                 "exercises": case["exercises"],
             }
         )
+    # v1.1 §7.4 derivations share the same assignment index and tree/leaf shape.
+    gen_assignment_switchback(index)
+    gen_assignment_matched(index)
     _write_json(os.path.join(TV, "assignment", "index.json"), {"vectors": index})
+
+
+# --------------------------------------------------------------------------- #
+# Assignment vectors — switchback + matched_cluster (v1.1 §7.4 derivations)
+# --------------------------------------------------------------------------- #
+
+# switchback: composite `group"|"index` ids; phase(group) = prf(group)&1;
+# arm = treatment iff (index + phase) % 2 == 1. treated_fraction_micro MUST be "500000".
+ASSIGN_SWITCHBACK_CASES = [
+    {
+        "name": "assign-12-switchback-2geo-2period",
+        "exercises": "switchback design: 2 geo-cohorts x 2 periods. Per-geo randomized "
+        "phase bit + parity alternation across periods; arm flips every period within a "
+        "geo. treated_fraction_micro MUST be 500000. Leaf carries the FULL composite "
+        "cohort_id and leaves sort by the FULL id (§7.5/§6.2).",
+        "experiment_id": "exp-2026-switchback-007",
+        "seed_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "cohort_ids": ["geo-11|0", "geo-11|1", "geo-22|0", "geo-22|1"],
+        "params": {"treated_fraction_micro": "500000"},
+    },
+    {
+        "name": "assign-13-switchback-3geo-noncontiguous",
+        "exercises": "switchback with 3 geo-cohorts and NON-CONTIGUOUS period indices "
+        "(arm is a pure function of (group,index) regardless of gaps). Different seed; "
+        "odd total leaf count (5) exercises odd-node promotion in the assignment tree.",
+        "experiment_id": "exp-2026-switchback-007",
+        "seed_hex": "a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
+        "cohort_ids": ["geo-a|0", "geo-a|2", "geo-a|5", "geo-b|1", "geo-c|0"],
+        "params": {"treated_fraction_micro": "500000"},
+    },
+]
+
+# matched_cluster: per-stratum k_s = round_he(frac * m_s / 1e6) clamped [0,m_s],
+# ranked by (prf_u64(FULL id), member_index); first k_s treated.
+ASSIGN_MATCHED_CASES = [
+    {
+        "name": "assign-14-matched-pairs-2x2",
+        "exercises": "matched_cluster canonical MATCHED PAIRS: two strata, each m_s=2, "
+        "treated_fraction_micro=500000 -> k_s=round_he(1.0)=1 (exactly one of each pair "
+        "treated). Ranked by (full-id prf, member_index).",
+        "experiment_id": "exp-2026-matched-009",
+        "seed_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "cohort_ids": ["pair-1|0", "pair-1|1", "pair-2|0", "pair-2|1"],
+        "params": {"treated_fraction_micro": "500000"},
+    },
+    {
+        "name": "assign-15-matched-mixed-strata-halfeven",
+        "exercises": "matched_cluster mixed strata exercising round-half-to-EVEN at the "
+        "exact .5 tie: stratum sA has m_s=3, frac=500000 -> 1.5 -> k_s=2 (q=1 odd -> q+1); "
+        "stratum sB has m_s=2 -> k_s=1. Proves banker's rounding + clamp, and per-stratum "
+        "independence.",
+        "experiment_id": "exp-2026-matched-009",
+        "seed_hex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "cohort_ids": ["sA|0", "sA|1", "sA|2", "sB|0", "sB|1"],
+        "params": {"treated_fraction_micro": "500000"},
+    },
+]
+
+
+def _assignment_common(case, design):
+    seed = bytes.fromhex(case["seed_hex"])
+    exp = case["experiment_id"]
+    commitment = seed_commitment(seed)
+    # Full-composite-id PRF for every cohort (auditable intermediate; the actual
+    # decision input per design is shown in the design-specific block).
+    prf_steps = [
+        {"cohort_id": cid, "prf_u64": str(cohort_prf(seed, exp, cid))}
+        for cid in case["cohort_ids"]
+    ]
+    assigns = derive_assignment(seed, exp, case["cohort_ids"], design, case["params"])
+    leaf_records = []
+    leaf_bytes_list = []
+    for a in assigns:
+        lb = assignment_leaf_bytes(a)
+        leaf_bytes_list.append(lb)
+        lh = leaf_hash(DOMAIN_ASSIGNMENT, lb)
+        leaf_records.append(
+            {
+                "cohort_id": a.cohort_id,
+                "arm": a.arm,
+                "prf_u64": str(a.prf_u64),
+                "leaf_object": assignment_leaf_object(a),
+                "leaf_canonical_bytes_utf8": lb.decode("utf-8"),
+                "leaf_canonical_bytes_hex": lb.hex(),
+                "leaf_hash_hex": lh.hex(),
+            }
+        )
+    root = merkle_root(leaf_bytes_list, DOMAIN_ASSIGNMENT)
+    n_treat = sum(1 for a in assigns if a.arm == "treatment")
+    rec = {
+        "name": case["name"],
+        "spec_section": "serialization.md §7.4 (%s derivation) + §6/§7.5 (assignment tree)"
+        % design,
+        "exercises": case["exercises"],
+        "inputs": {
+            "experiment_id": exp,
+            "seed_hex": case["seed_hex"],
+            "cohort_ids": case["cohort_ids"],
+            "design": design,
+            "params": case["params"],
+        },
+        "step1_seed_commitment": {
+            "domain": "CRP-seed-commit-v1",
+            "note": "commitment = SHA-256(domain || seed); frozen BEFORE the seed is revealed",
+            "seed_commitment_hex": commitment.hex(),
+        },
+        "step2_cohort_prf": {
+            "domain": "CRP-assign-v1",
+            "note": "prf_u64(FULL composite cohort_id) = int(SHA-256(domain || seed || "
+            "u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian). "
+            "Auditable intermediate; the per-design decision input is in the design block.",
+            "values": prf_steps,
+        },
+    }
+    return seed, exp, assigns, leaf_bytes_list, leaf_records, root, n_treat, rec
+
+
+def gen_assignment_switchback(index):
+    for case in ASSIGN_SWITCHBACK_CASES:
+        seed, exp, assigns, _lb, leaf_records, root, n_treat, rec = _assignment_common(
+            case, "switchback"
+        )
+        # Per-geo phase table (the switchback randomization unit).
+        groups = []
+        seen = set()
+        for cid in case["cohort_ids"]:
+            group, _idx = parse_composite_cohort_id(cid)
+            if group in seen:
+                continue
+            seen.add(group)
+            groups.append(
+                {
+                    "group": group,
+                    "group_prf_u64": str(cohort_prf(seed, exp, group)),
+                    "phase": str(switchback_phase(seed, exp, group)),
+                }
+            )
+        periods = []
+        for cid in case["cohort_ids"]:
+            group, idx = parse_composite_cohort_id(cid)
+            ph = switchback_phase(seed, exp, group)
+            periods.append(
+                {
+                    "cohort_id": cid,
+                    "group": group,
+                    "index": str(idx),
+                    "phase": str(ph),
+                    "index_plus_phase_mod2": str((idx + ph) % 2),
+                    "arm": "treatment" if (idx + ph) % 2 == 1 else "control",
+                }
+            )
+        rec["step2b_switchback_derivation"] = {
+            "note": "phase(group) = prf_u64(group) & 1; arm = treatment iff "
+            "(index + phase) % 2 == 1. treated_fraction_micro MUST be '500000' "
+            "(asserted, not read by the derivation).",
+            "treated_fraction_micro_asserted": case["params"]["treated_fraction_micro"],
+            "per_group_phase": groups,
+            "per_unit_arm": periods,
+        }
+        rec["step3_summary"] = {
+            "treatment_count": str(n_treat),
+            "control_count": str(len(assigns) - n_treat),
+        }
+        rec["step4_leaves"] = {
+            "merkle_domain_tag": "CRP:assignment:v1",
+            "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+            "node_hash_formula": "SHA-256(0x01 || left || right)",
+            "leaf_order": "FULL composite cohort_id ascending (UTF-16 code-unit)",
+            "leaves": leaf_records,
+        }
+        rec["step5_assignment_root"] = {"assignment_root_hex": root.hex()}
+        _write_json(os.path.join(TV, "assignment", case["name"], "vector.json"), rec)
+        index.append(
+            {
+                "name": case["name"],
+                "assignment_root_hex": root.hex(),
+                "seed_commitment_hex": rec["step1_seed_commitment"]["seed_commitment_hex"],
+                "exercises": case["exercises"],
+            }
+        )
+
+
+def gen_assignment_matched(index):
+    for case in ASSIGN_MATCHED_CASES:
+        seed, exp, assigns, _lb, leaf_records, root, n_treat, rec = _assignment_common(
+            case, "matched_cluster"
+        )
+        frac = int(case["params"]["treated_fraction_micro"])
+        # Per-stratum k_s + within-stratum ranking.
+        strata_map = {}
+        for cid in case["cohort_ids"]:
+            group, idx = parse_composite_cohort_id(cid)
+            strata_map.setdefault(group, []).append(
+                (cohort_prf(seed, exp, cid), idx, cid)
+            )
+        strata_records = []
+        arm_by_cid = {a.cohort_id: a.arm for a in assigns}
+        for group, members in strata_map.items():
+            m_s = len(members)
+            k_s = max(0, min(round_half_even_div(frac * m_s, 1_000_000), m_s))
+            ranked = sorted(members, key=lambda t: (t[0], t[1]))
+            ranked_rows = []
+            for pos, (prf_u64, idx, cid) in enumerate(ranked):
+                ranked_rows.append(
+                    {
+                        "rank": str(pos),
+                        "cohort_id": cid,
+                        "member_index": str(idx),
+                        "prf_u64": str(prf_u64),
+                        "arm": arm_by_cid[cid],
+                    }
+                )
+            strata_records.append(
+                {
+                    "group": group,
+                    "m_s": str(m_s),
+                    "frac_times_m_s": str(frac * m_s),
+                    "k_s": str(k_s),
+                    "ranked_members": ranked_rows,
+                }
+            )
+        rec["step2b_matched_cluster_derivation"] = {
+            "note": "per stratum s: k_s = round_half_even(frac * m_s / 1e6) clamped [0,m_s]; "
+            "rank members ascending by (prf_u64(FULL id), member_index); first k_s -> treatment.",
+            "treated_fraction_micro": case["params"]["treated_fraction_micro"],
+            "per_stratum": strata_records,
+        }
+        rec["step3_summary"] = {
+            "treatment_count": str(n_treat),
+            "control_count": str(len(assigns) - n_treat),
+        }
+        rec["step4_leaves"] = {
+            "merkle_domain_tag": "CRP:assignment:v1",
+            "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+            "node_hash_formula": "SHA-256(0x01 || left || right)",
+            "leaf_order": "FULL composite cohort_id ascending (UTF-16 code-unit)",
+            "leaves": leaf_records,
+        }
+        rec["step5_assignment_root"] = {"assignment_root_hex": root.hex()}
+        _write_json(os.path.join(TV, "assignment", case["name"], "vector.json"), rec)
+        index.append(
+            {
+                "name": case["name"],
+                "assignment_root_hex": root.hex(),
+                "seed_commitment_hex": rec["step1_seed_commitment"]["seed_commitment_hex"],
+                "exercises": case["exercises"],
+            }
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -629,8 +885,384 @@ def gen_adversarial() -> None:
     _write_json(os.path.join(TV, "adversarial", "index.json"), {"fixtures": index})
 
 
+# --------------------------------------------------------------------------- #
+# Reward-root vectors (serialization.md §6.6, aggregate-one-leaf-per-recipient)
+# --------------------------------------------------------------------------- #
+
+# 32-byte recipient pubkeys as raw hex (native 32-byte form). Chosen so INPUT
+# order differs from the sorted (BE32-ascending) leaf order, proving the ranking.
+_R_GAMMA = "0a" * 32  # sorts FIRST  (0x0a…)
+_R_ALPHA = "11" * 32  # sorts SECOND (0x11…)
+_R_DELTA = "33" * 32  # zero-sum in reward-02 (must be dropped despite sorting mid-set)
+_R_BETA = "22" * 32   # sorts THIRD  (0x22…)
+_R_EPSILON = "44" * 32
+_R_ZETA = "77" * 32
+
+
+def _reward_leaf_rows(leaves):
+    rows = []
+    for lf in leaves:
+        content = reward_mod.reward_leaf_content(
+            lf.recipient, lf.amount_base_units, lf.leaf_index
+        )
+        rows.append(
+            {
+                "leaf_index": str(lf.leaf_index),
+                "recipient_hex": lf.recipient.hex(),
+                "amount_base_units": str(lf.amount_base_units),
+                "leaf_content_hex": content.hex(),
+                "leaf_hash_hex": reward_mod.reward_leaf_hash(
+                    lf.recipient, lf.amount_base_units, lf.leaf_index
+                ).hex(),
+            }
+        )
+    return rows
+
+
+def _reward_positive_vector(name, exercises, contributions):
+    """contributions: list of {recipient_hex, cohort_id, amount_base_units(str)}."""
+    contrib_pairs = [
+        (bytes.fromhex(c["recipient_hex"]), int(c["amount_base_units"]))
+        for c in contributions
+    ]
+    aggregate = reward_mod.aggregate_contributions(contrib_pairs)
+    leaves = reward_mod.compile_reward_leaves(aggregate)
+    dropped = sorted(r.hex() for r, a in aggregate.items() if a == 0)
+    root = reward_mod.reward_root(leaves)
+    return {
+        "name": name,
+        "kind": "reward_positive",
+        "spec_section": "serialization.md §6.6 + reward-policy.md Stage 2 (aggregate-one-leaf-per-recipient)",
+        "exercises": exercises,
+        "leaf_hash_formula": "SHA-256(0x00 || 'CRP:reward:v1' || recipient(32) || "
+        "amount_base_units(u64 BE) || leaf_index(u64 BE))",
+        "node_hash_formula": "SHA-256(0x01 || left || right)",
+        "ordering": "aggregate Σ over cohorts per recipient; DROP zero-sum recipients; "
+        "rank ascending by recipient(BE32, unique key) then amount_base_units; "
+        "leaf_index = 0-based rank; leaves placed by leaf_index contiguous from 0",
+        "inputs": {"contributions": contributions},
+        "aggregate_recipient_amount_map": {
+            r.hex(): str(a) for r, a in sorted(aggregate.items())
+        },
+        "dropped_zero_sum_recipients_hex": dropped,
+        "leaves": _reward_leaf_rows(leaves),
+        "reward_root_hex": root.hex(),
+    }
+
+
+def gen_reward():
+    index = []
+    vectors = []
+
+    # reward-01: multiple recipients, ordering matters, Σ over cohorts.
+    vectors.append(
+        _reward_positive_vector(
+            "reward-01-multi-recipient-ordering",
+            "multiple distinct recipients: input order differs from the sorted (recipient "
+            "BE32 ascending) leaf order; two recipients each earn across TWO cohorts, "
+            "aggregated by integer Σ. Proves ranking + leaf_index assignment + Σ-over-cohorts.",
+            [
+                {"recipient_hex": _R_BETA, "cohort_id": "cohort-A", "amount_base_units": "70"},
+                {"recipient_hex": _R_ALPHA, "cohort_id": "cohort-B", "amount_base_units": "50"},
+                {"recipient_hex": _R_GAMMA, "cohort_id": "cohort-C", "amount_base_units": "5"},
+                {"recipient_hex": _R_ALPHA, "cohort_id": "cohort-A", "amount_base_units": "100"},
+                {"recipient_hex": _R_GAMMA, "cohort_id": "cohort-B", "amount_base_units": "25"},
+            ],
+        )
+    )
+
+    # reward-02: a zero-sum recipient MUST be dropped (even though it sorts mid-set).
+    vectors.append(
+        _reward_positive_vector(
+            "reward-02-zero-sum-dropped",
+            "a recipient whose aggregate sum is 0 (its only contribution is 0) is OMITTED "
+            "from the leaf set and does NOT consume a leaf_index — even though its recipient "
+            "BE32 sorts BETWEEN the two surviving leaves. Confirms zero-sum omission.",
+            [
+                {"recipient_hex": _R_ALPHA, "cohort_id": "cohort-A", "amount_base_units": "40"},
+                {"recipient_hex": _R_DELTA, "cohort_id": "cohort-A", "amount_base_units": "0"},
+                {"recipient_hex": _R_EPSILON, "cohort_id": "cohort-B", "amount_base_units": "10"},
+            ],
+        )
+    )
+
+    # reward-03: single-recipient base case (root == the sole leaf_hash).
+    vectors.append(
+        _reward_positive_vector(
+            "reward-03-single-recipient",
+            "single-recipient base case: one leaf at leaf_index 0; reward_root == "
+            "leaf_hash(sole leaf) (no interior node). Merkle base case for the reward tree.",
+            [
+                {"recipient_hex": _R_ZETA, "cohort_id": "cohort-A", "amount_base_units": "1000"},
+            ],
+        )
+    )
+
+    # reward-05: empty distribution (all contributions zero) -> empty tree sentinel.
+    empty_agg = reward_mod.aggregate_contributions(
+        [(bytes.fromhex(_R_ALPHA), 0), (bytes.fromhex(_R_BETA), 0)]
+    )
+    empty_leaves = reward_mod.compile_reward_leaves(empty_agg)
+    empty_root = reward_mod.reward_root(empty_leaves)
+    vectors.append(
+        {
+            "name": "reward-05-empty-all-zero",
+            "kind": "reward_empty",
+            "spec_section": "serialization.md §6.6 + §6.4 (empty tree)",
+            "exercises": "fully-null distribution: every recipient's aggregate is 0, so ALL "
+            "are dropped -> empty leaf set -> reward_root = 32 zero bytes (§6.4). "
+            "finalize_distribution then locks a zero root and the whole budget is recoverable.",
+            "inputs": {
+                "contributions": [
+                    {"recipient_hex": _R_ALPHA, "cohort_id": "cohort-A", "amount_base_units": "0"},
+                    {"recipient_hex": _R_BETA, "cohort_id": "cohort-A", "amount_base_units": "0"},
+                ]
+            },
+            "leaves": [],
+            "reward_root_hex": empty_root.hex(),
+        }
+    )
+
+    # reward-04: HARD ERROR — a leaf set with a DUPLICATE recipient (compiler bug).
+    # recipient is a unique key after aggregation; two leaves sharing it is a hard error.
+    vectors.append(
+        {
+            "name": "reward-04-duplicate-recipient-error",
+            "kind": "reward_duplicate_recipient_error",
+            "spec_section": "serialization.md §6.6 (recipient is a UNIQUE key after aggregation)",
+            "exercises": "compiler-bug guard: a reward leaf set containing TWO leaves with the "
+            "same recipient is a HARD ERROR (recipient is a unique key; the SDK's "
+            "reject-on-ambiguity must fire). Demonstrates the verifier REJECTS malformed "
+            "compiler output rather than silently building a tree.",
+            "expected_result": "reject",
+            "rejection_code": "DUPLICATE_REWARD_RECIPIENT",
+            "why_rejected": "After aggregate-one-leaf-per-recipient, `recipient` is a unique "
+            "primary key; two leaves sharing it can only be a compiler bug and would also "
+            "collide the per-experiment ClaimReceipt nullifier PDA.",
+            "inputs": {
+                "malformed_leaf_set": [
+                    {"recipient_hex": _R_ALPHA, "amount_base_units": "10", "leaf_index": "0"},
+                    {"recipient_hex": _R_ALPHA, "amount_base_units": "20", "leaf_index": "1"},
+                ]
+            },
+        }
+    )
+
+    for v in vectors:
+        _write_json(os.path.join(TV, "reward", v["name"] + ".json"), v)
+        entry = {"name": v["name"], "kind": v["kind"]}
+        if v["kind"].endswith("_error"):
+            entry["expected_result"] = v["expected_result"]
+            entry["rejection_code"] = v["rejection_code"]
+        else:
+            entry["reward_root_hex"] = v["reward_root_hex"]
+        index.append(entry)
+    _write_json(os.path.join(TV, "reward", "index.json"), {"vectors": index})
+
+
+# --------------------------------------------------------------------------- #
+# Evidence-root vectors (serialization.md §6.5 — OFF-CHAIN source of truth)
+# --------------------------------------------------------------------------- #
+
+
+def _evidence_batch(cohort_id, epoch_index, start, end, sig_byte, signer_pubkey_b58):
+    """A schema-shaped evidence batch header (varied so leaf_hashes differ)."""
+    hh = sig_byte * 64
+    sig = sig_byte * 128
+    return {
+        "spec_version": "1.0.0",
+        "experiment_id": "env-sensors-pilot-001",
+        "epoch_index": epoch_index,
+        "cohort_id": cohort_id,
+        "time_range": {"start": start, "end": end},
+        "signer_set_commitment": {
+            "algo": "sha256",
+            "merkle_root_hex": "a1" * 32,
+            "signer_count": "3",
+            "leaf_scheme": "sha256(0x00||'signer'||signer_pubkey_be32)",
+        },
+        "observations_commitment": {
+            "algo": "sha256",
+            "merkle_root_hex": "b2" * 32,
+            "leaf_count": "4",
+            "leaf_scheme": "sha256(0x00||'obs'||observation_commitment_be32)",
+        },
+        "aggregate_summary": {
+            "accepted_count": "100",
+            "rejected_count": "2",
+            "distinct_signers": "3",
+        },
+        "batch_signature": {
+            "algo": "ed25519",
+            "signer_pubkey": signer_pubkey_b58,
+            "header_hash_hex": hh,
+            "signature_hex": sig,
+        },
+    }
+
+
+def gen_evidence():
+    index = []
+    vectors = []
+
+    # A signer pubkey (base58, decodes to exactly 32 bytes) used inside batch headers.
+    coord_pk = evidence_mod.b58encode(bytes([0x0C]) + bytes(31))
+
+    # evidence-01: multi-batch epoch tree, ordering by leaf_hash.
+    batches = [
+        _evidence_batch("cohort-x", "0", "1721001600", "1721088000", "aa", coord_pk),
+        _evidence_batch("cohort-y", "0", "1721088000", "1721174400", "bb", coord_pk),
+        _evidence_batch("cohort-z", "0", "1721174400", "1721260800", "cc", coord_pk),
+    ]
+    epoch_root, epoch_records = evidence_mod.epoch_tree(batches)
+    # Unsorted per-batch leaf hashes (to make the reordering visible).
+    unsorted = []
+    for b in batches:
+        cb = canonical_json_bytes(b)
+        unsorted.append(
+            {
+                "cohort_id": b["cohort_id"],
+                "leaf_canonical_bytes_len": str(len(cb)),
+                "leaf_hash_hex": leaf_hash(DOMAIN_EVIDENCE, cb).hex(),
+            }
+        )
+    vectors.append(
+        {
+            "name": "evidence-01-epoch-multibatch",
+            "kind": "evidence_epoch",
+            "spec_section": "serialization.md §6.5 (evidence epoch tree; DOMAIN 'CRP:evidence:v1')",
+            "exercises": "multi-batch epoch: 3 signed batch headers, leaf = CJSON(batch) "
+            "(incl. batch_signature), ordered ASCENDING by leaf_hash before building the "
+            "tree. Input order is NOT insertion order — the tree is data-derived.",
+            "leaf_hash_formula": "SHA-256(0x00 || 'CRP:evidence:v1' || CJSON(batch))",
+            "node_hash_formula": "SHA-256(0x01 || left || right)",
+            "sort_key": "leaf_hash ascending (byte-identical batch -> hard error)",
+            "inputs": {"batches": batches},
+            "unsorted_leaf_hashes": unsorted,
+            "ordered_leaves": epoch_records,
+            "evidence_epoch_root_hex": epoch_root.hex(),
+        }
+    )
+
+    # evidence-02: multi-signer set sub-commitment (leaf domain 'signer').
+    # Raw first bytes chosen so INPUT order != sorted BE32 order.
+    signer_raw = [
+        bytes([0x30]) + bytes(31),
+        bytes([0x05]) + bytes(31),
+        bytes([0x99]) + bytes(31),
+        bytes([0x50]) + bytes(31),
+    ]
+    signer_b58 = [evidence_mod.b58encode(r) for r in signer_raw]
+    signer_root, signer_records = evidence_mod.signer_subtree(signer_b58)
+    vectors.append(
+        {
+            "name": "evidence-02-signer-set-multisigner",
+            "kind": "evidence_signer_set",
+            "spec_section": "serialization.md §6.5 (signer set sub-commitment; leaf domain 'signer')",
+            "exercises": "signer-set sub-commitment over 4 ed25519 signer pubkeys. Each "
+            "signer_pubkey is base58-decoded to EXACTLY 32 bytes (hard error otherwise), "
+            "sorted ASCENDING by the 32-byte pubkey (BE), then hashed. Input order != sorted.",
+            "leaf_hash_formula": "SHA-256(0x00 || 'signer' || signer_pubkey_be32)",
+            "node_hash_formula": "SHA-256(0x01 || left || right)",
+            "sort_key": "signer_pubkey_be32 ascending (duplicate pubkey -> hard error)",
+            "inputs": {"signer_pubkeys_base58": signer_b58},
+            "ordered_leaves": signer_records,
+            "signer_set_root_hex": signer_root.hex(),
+        }
+    )
+
+    # evidence-03: multi-observation set sub-commitment (leaf domain 'obs').
+    obs_hexes = [
+        "70" + "00" * 31,
+        "0f" + "ff" * 31,
+        "40" + "11" * 31,
+        "40" + "10" * 31,
+    ]
+    obs_root, obs_records = evidence_mod.observation_subtree(obs_hexes)
+    vectors.append(
+        {
+            "name": "evidence-03-observation-set",
+            "kind": "evidence_observation_set",
+            "spec_section": "serialization.md §6.5 (observation sub-commitment; leaf domain 'obs')",
+            "exercises": "observation sub-commitment over 4 per-observation content "
+            "commitments (32 raw bytes each from payload_commitment_hex ^[0-9a-f]{64}$), "
+            "sorted ASCENDING by the 32-byte commitment (BE). Includes a tight adjacent "
+            "pair (0x40 10.. vs 0x40 11..) to exercise byte-lexicographic ordering.",
+            "leaf_hash_formula": "SHA-256(0x00 || 'obs' || observation_commitment_be32)",
+            "node_hash_formula": "SHA-256(0x01 || left || right)",
+            "sort_key": "observation_commitment_be32 ascending (duplicate -> hard error)",
+            "inputs": {"payload_commitment_hexes": obs_hexes},
+            "ordered_leaves": obs_records,
+            "observations_root_hex": obs_root.hex(),
+        }
+    )
+
+    # evidence-04: empty-tree sentinel (32 zero bytes) — domain-independent (§6.4).
+    z = "00" * 32
+    assert evidence_mod.epoch_tree([])[0].hex() == z
+    assert evidence_mod.signer_subtree([])[0].hex() == z
+    assert evidence_mod.observation_subtree([])[0].hex() == z
+    vectors.append(
+        {
+            "name": "evidence-04-empty-tree",
+            "kind": "evidence_empty_tree",
+            "spec_section": "serialization.md §6.4 (empty tree) + §6.5",
+            "exercises": "empty-tree sentinel: an evidence tree (epoch / signer / observation) "
+            "with ZERO leaves has root = 32 zero bytes — an unmistakable 'nothing committed' "
+            "sentinel, never SHA-256(DOMAIN_TAG).",
+            "inputs": {"leaves": []},
+            "empty_root_hex": z,
+        }
+    )
+
+    # evidence-05: HARD ERROR — signer_pubkey base58-decodes to != 32 bytes.
+    # A base58 encoding of a 33-byte value: the {32,44}-CHAR regex would pass, but the
+    # 32-byte length pin (§6.5) rejects it.
+    bad_pk = evidence_mod.b58encode(bytes([0x01]) + bytes(32))  # 33 bytes -> hard error
+    decoded_len = len(evidence_mod.b58decode(bad_pk))
+    vectors.append(
+        {
+            "name": "evidence-05-signer-not-32-error",
+            "kind": "evidence_signer_not_32_error",
+            "spec_section": "serialization.md §6.5 (signer_pubkey MUST base58-decode to EXACTLY 32 bytes)",
+            "exercises": "hard-error guard: a signer_pubkey that base58-decodes to a "
+            "NON-32-byte value (here 33 bytes) is rejected before ordering. The {32,44}-"
+            "CHARACTER schema regex does not exclude this; the §6.5 length pin does. Prevents "
+            "on-chain vs off-chain divergence on a fixed-width 32-byte sort key.",
+            "expected_result": "reject",
+            "rejection_code": "SIGNER_PUBKEY_NOT_32_BYTES",
+            "why_rejected": "signer_pubkey_be32 must be exactly 32 bytes for the fixed-width "
+            "sol_memcmp/BE sort key; a 31/33-byte decode diverges on-chain vs off-chain and "
+            "admits an invalid pubkey.",
+            "inputs": {
+                "signer_pubkey_base58": bad_pk,
+                "base58_decoded_length": str(decoded_len),
+            },
+        }
+    )
+
+    for v in vectors:
+        _write_json(os.path.join(TV, "evidence", v["name"] + ".json"), v)
+        entry = {"name": v["name"], "kind": v["kind"]}
+        if v["kind"].endswith("_error"):
+            entry["expected_result"] = v["expected_result"]
+            entry["rejection_code"] = v["rejection_code"]
+        elif v["kind"] == "evidence_epoch":
+            entry["evidence_epoch_root_hex"] = v["evidence_epoch_root_hex"]
+        elif v["kind"] == "evidence_signer_set":
+            entry["signer_set_root_hex"] = v["signer_set_root_hex"]
+        elif v["kind"] == "evidence_observation_set":
+            entry["observations_root_hex"] = v["observations_root_hex"]
+        elif v["kind"] == "evidence_empty_tree":
+            entry["empty_root_hex"] = v["empty_root_hex"]
+        index.append(entry)
+    _write_json(os.path.join(TV, "evidence", "index.json"), {"vectors": index})
+
+
 if __name__ == "__main__":
     gen_serialization()
     gen_assignment()
+    gen_reward()
+    gen_evidence()
     gen_adversarial()
     print("vectors written to", TV)

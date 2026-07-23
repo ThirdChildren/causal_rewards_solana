@@ -62,6 +62,46 @@ adversarial fixtures are what "adversarial tests green" means — each MUST be
       inputs supplied scrambled to prove order-independent derivation.
     - `assign-10-bernoulli-16cohorts` — 16-leaf balanced power-of-2 tree.
     - `assign-11-fixed-count-3of7` — 7 cohorts (odd) exercising odd-node promotion.
+    - `assign-12-switchback-2geo-2period` — **switchback** (§7.4): 2 geo × 2 periods;
+      per-geo phase bit + parity alternation; `treated_fraction_micro` MUST be `500000`.
+    - `assign-13-switchback-3geo-noncontiguous` — switchback with non-contiguous period
+      indices (arm is a pure fn of `(group,index)`); odd leaf count (promotion).
+    - `assign-14-matched-pairs-2x2` — **matched_cluster** (§7.4) canonical matched pairs:
+      two strata `m_s=2`, `frac=500000` → `k_s=round_he(1.0)=1` (one of each pair treated).
+    - `assign-15-matched-mixed-strata-halfeven` — matched_cluster mixed strata exercising
+      round-half-to-**even** at the exact `.5` tie: `m_s=3, frac=500000` → `k_s=2`; `m_s=2` → `k_s=1`.
+    - Switchback/matched vectors add `step2b_switchback_derivation` / `step2b_matched_cluster_derivation`
+      (per-group phase / per-stratum `k_s` + ranking). The leaf still carries the FULL composite
+      `cohort_id` and leaves sort by the FULL id (§7.5/§6.2) — the `group"|"index` grammar governs
+      only how a derivation reads structure out of the id, never the leaf form or ordering.
+- `reward/` — reward leaf + reward Merkle root (§6.6, aggregate-one-leaf-per-recipient). Leaf =
+  `SHA-256(0x00 || "CRP:reward:v1" || recipient(32) || amount_base_units(u64 BE) || leaf_index(u64 BE))`
+  (fixed-width raw bytes, NOT CJSON). Leaves = one per distinct recipient, `amount = Σ` over
+  cohorts, **zero-sum recipients OMITTED**; ranked/indexed ascending by `recipient` (BE32, unique
+  key) then `amount_base_units`; `leaf_index` = 0-based rank. Each vector shows the input
+  contribution list, the aggregate recipient→amount map, dropped zero-sum recipients, the sorted
+  leaf table (`leaf_index`, `leaf_content_hex`, `leaf_hash_hex`), and the `reward_root_hex`.
+  - `reward-01-multi-recipient-ordering` — multiple recipients, input order ≠ sorted order,
+    two recipients each earn across two cohorts (Σ).
+  - `reward-02-zero-sum-dropped` — a zero-sum recipient dropped even though its BE32 sorts
+    between the two survivors.
+  - `reward-03-single-recipient` — single-leaf base case (`reward_root == leaf_hash`).
+  - `reward-05-empty-all-zero` — fully-null distribution → empty tree → root = 32 zero bytes (§6.4).
+  - `reward-04-duplicate-recipient-error` — HARD ERROR: a leaf set with a duplicate `recipient`
+    (compiler bug) is rejected (`DUPLICATE_REWARD_RECIPIENT`).
+- `evidence/` — off-chain evidence Merkle roots (§6.5). **Source of truth for the off-chain roots
+  only**; the singular on-chain `EvidenceEpoch` account-field mapping is a separate flagged item and
+  is not reconciled here. Three §6.1-shaped trees; each vector includes intermediate leaf hashes.
+  - `evidence-01-epoch-multibatch` — epoch tree over 3 batch headers; leaf = `CJSON(batch)` (incl.
+    `batch_signature`); ordered ascending by `leaf_hash` (input order is not insertion order).
+  - `evidence-02-signer-set-multisigner` — signer sub-commitment (domain `signer`); each
+    `signer_pubkey` base58-decodes to exactly 32 bytes; sorted ascending by `signer_pubkey_be32`.
+  - `evidence-03-observation-set` — observation sub-commitment (domain `obs`); 32-byte content
+    commitments sorted ascending, incl. a tight adjacent pair for byte-lexicographic ordering.
+  - `evidence-04-empty-tree` — empty-tree sentinel: root = 32 zero bytes for epoch/signer/obs.
+  - `evidence-05-signer-not-32-error` — HARD ERROR: a `signer_pubkey` that base58-decodes to a
+    non-32-byte value is rejected (`SIGNER_PUBKEY_NOT_32_BYTES`); the `{32,44}`-character schema
+    regex does not exclude this, the §6.5 length pin does.
 - `adversarial/` — negative fixtures every conforming program **and** the
   verifier MUST reject. Each carries the offending input, `why_rejected`, the
   `invariant` + state-machine/serialization `guard` that forbids it, a stable
@@ -94,10 +134,15 @@ python3 verify_vectors.py      # independently re-derive & assert (exit 0 = OK)
 `verify_vectors.py` recomputes every canonical byte string, hash, and root from
 each vector's declared **inputs** (never trusting the stored expected value),
 additionally asserts each assignment root is invariant under input cohort order,
-and confirms each adversarial fixture's rejection predicate genuinely fires.
+re-derives the switchback phase / matched_cluster `k_s` tables, recompiles every
+reward root and off-chain evidence root, and confirms each adversarial + hard-error
+fixture's rejection predicate genuinely fires (duplicate reward recipient,
+base58-not-32 signer pubkey).
 
-Estimation and reward-compilation golden roots (and their adversarial cases —
-tampered result, substituted reward root) follow in M3.
+Reference modules (`../verifier-cli/reference/`): `canonical.py`, `merkle.py`,
+`assignment.py` (incl. switchback + matched_cluster), `reward.py` (§6.6), and
+`evidence.py` (§6.5, dependency-free base58). The generator/verifier are
+byte-stable across runs and machines (no wall-clock, no RNG, no float).
 
 ## License
 

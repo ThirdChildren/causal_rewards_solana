@@ -1,0 +1,13 @@
+{
+  "name": "evidence-05-signer-not-32-error",
+  "kind": "evidence_signer_not_32_error",
+  "spec_section": "serialization.md §6.5 (signer_pubkey MUST base58-decode to EXACTLY 32 bytes)",
+  "exercises": "hard-error guard: a signer_pubkey that base58-decodes to a NON-32-byte value (here 33 bytes) is rejected before ordering. The {32,44}-CHARACTER schema regex does not exclude this; the §6.5 length pin does. Prevents on-chain vs off-chain divergence on a fixed-width 32-byte sort key.",
+  "expected_result": "reject",
+  "rejection_code": "SIGNER_PUBKEY_NOT_32_BYTES",
+  "why_rejected": "signer_pubkey_be32 must be exactly 32 bytes for the fixed-width sol_memcmp/BE sort key; a 31/33-byte decode diverges on-chain vs off-chain and admits an invalid pubkey.",
+  "inputs": {
+    "signer_pubkey_base58": "JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFH",
+    "base58_decoded_length": "33"
+  }
+}

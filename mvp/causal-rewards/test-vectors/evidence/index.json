@@ -1,0 +1,30 @@
+{
+  "vectors": [
+    {
+      "name": "evidence-01-epoch-multibatch",
+      "kind": "evidence_epoch",
+      "evidence_epoch_root_hex": "a13e1cdc8702252b89ab08b6943ae82bc65325c2bbce119211a270abc87deeb2"
+    },
+    {
+      "name": "evidence-02-signer-set-multisigner",
+      "kind": "evidence_signer_set",
+      "signer_set_root_hex": "e45697c86d48d63b8c25a975224344060a4b5cf72bd7d00b3364b6247e5fd52e"
+    },
+    {
+      "name": "evidence-03-observation-set",
+      "kind": "evidence_observation_set",
+      "observations_root_hex": "1010891bf501f89b96db447a295d0820c20ad694afdcff4cf5c0c2e368ebaf56"
+    },
+    {
+      "name": "evidence-04-empty-tree",
+      "kind": "evidence_empty_tree",
+      "empty_root_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "evidence-05-signer-not-32-error",
+      "kind": "evidence_signer_not_32_error",
+      "expected_result": "reject",
+      "rejection_code": "SIGNER_PUBKEY_NOT_32_BYTES"
+    }
+  ]
+}

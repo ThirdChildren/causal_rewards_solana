@@ -21,8 +21,13 @@ from assignment import (
     assignment_leaf_bytes,
     cohort_prf,
     derive_assignment,
+    parse_composite_cohort_id,
+    round_half_even_div,
     seed_commitment,
+    switchback_phase,
 )
+import reward as reward_mod
+import evidence as evidence_mod
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TV = os.path.abspath(os.path.join(HERE, "..", "..", "test-vectors"))
@@ -100,6 +105,34 @@ def verify_assignment() -> None:
         ).hex()
         check(f"{name}: assignment_root invariant under input order", root_rev, want_root)
 
+        # v1.1 §7.4 design-specific intermediate blocks (switchback / matched_cluster):
+        # re-derive phase / k_s from inputs and confirm the published tables.
+        sb = rec.get("step2b_switchback_derivation")
+        if sb is not None:
+            for g in sb["per_group_phase"]:
+                check(
+                    f"{name}: switchback phase[{g['group']}]",
+                    str(switchback_phase(seed, exp, g["group"])),
+                    g["phase"],
+                )
+                check(
+                    f"{name}: switchback group_prf[{g['group']}]",
+                    str(cohort_prf(seed, exp, g["group"])),
+                    g["group_prf_u64"],
+                )
+            for u in sb["per_unit_arm"]:
+                grp, idx = parse_composite_cohort_id(u["cohort_id"])
+                ph = switchback_phase(seed, exp, grp)
+                want_arm = "treatment" if (idx + ph) % 2 == 1 else "control"
+                check(f"{name}: switchback arm[{u['cohort_id']}]", want_arm, u["arm"])
+        mc = rec.get("step2b_matched_cluster_derivation")
+        if mc is not None:
+            frac = int(mc["treated_fraction_micro"])
+            for st in mc["per_stratum"]:
+                m_s = int(st["m_s"])
+                want_k = max(0, min(round_half_even_div(frac * m_s, 1_000_000), m_s))
+                check(f"{name}: matched k_s[{st['group']}]", str(want_k), st["k_s"])
+
 
 def verify_adversarial() -> None:
     """Re-evaluate each adversarial fixture's rejection predicate.
@@ -175,9 +208,123 @@ def verify_adversarial() -> None:
             _failures.append((f"{name}: unknown check kind", kind, "a known check kind"))
 
 
+def verify_reward() -> None:
+    """Re-derive reward roots (§6.6 aggregate-one-leaf-per-recipient) from inputs."""
+    d = os.path.join(TV, "reward")
+    if not os.path.isdir(d):
+        return
+    for fn in sorted(os.listdir(d)):
+        if fn == "index.json" or not fn.endswith(".json"):
+            continue
+        rec = json.load(open(os.path.join(d, fn), encoding="utf-8"))
+        name = rec["name"]
+        kind = rec["kind"]
+
+        if kind in ("reward_positive", "reward_empty"):
+            pairs = [
+                (bytes.fromhex(c["recipient_hex"]), int(c["amount_base_units"]))
+                for c in rec["inputs"]["contributions"]
+            ]
+            agg = reward_mod.aggregate_contributions(pairs)
+            leaves = reward_mod.compile_reward_leaves(agg)
+            # Leaf table (if present).
+            want_leaves = rec.get("leaves", [])
+            check(f"{name}: reward leaf count", len(leaves), len(want_leaves))
+            for lf, wl in zip(leaves, want_leaves):
+                check(f"{name}: leaf_index", str(lf.leaf_index), wl["leaf_index"])
+                check(f"{name}: recipient_hex", lf.recipient.hex(), wl["recipient_hex"])
+                check(
+                    f"{name}: amount_base_units",
+                    str(lf.amount_base_units),
+                    wl["amount_base_units"],
+                )
+                content = reward_mod.reward_leaf_content(
+                    lf.recipient, lf.amount_base_units, lf.leaf_index
+                )
+                check(f"{name}: leaf_content_hex", content.hex(), wl["leaf_content_hex"])
+                check(
+                    f"{name}: leaf_hash_hex",
+                    reward_mod.reward_leaf_hash(
+                        lf.recipient, lf.amount_base_units, lf.leaf_index
+                    ).hex(),
+                    wl["leaf_hash_hex"],
+                )
+            root = reward_mod.reward_root(leaves).hex()
+            check(f"{name}: reward_root", root, rec["reward_root_hex"])
+        elif kind == "reward_duplicate_recipient_error":
+            check(f"{name}: expected_result is reject", rec["expected_result"], "reject")
+            leaves = [
+                reward_mod.RewardLeaf(
+                    bytes.fromhex(l["recipient_hex"]),
+                    int(l["amount_base_units"]),
+                    int(l["leaf_index"]),
+                )
+                for l in rec["inputs"]["malformed_leaf_set"]
+            ]
+            raised = False
+            try:
+                reward_mod.reward_root(leaves)
+            except ValueError:
+                raised = True
+            check(f"{name}: duplicate-recipient leaf set is REJECTED (hard error)", raised, True)
+        else:
+            _failures.append((f"{name}: unknown reward kind", kind, "a known reward kind"))
+
+
+def verify_evidence() -> None:
+    """Re-derive off-chain evidence roots (§6.5 three trees) from inputs."""
+    d = os.path.join(TV, "evidence")
+    if not os.path.isdir(d):
+        return
+    z = "00" * 32
+    for fn in sorted(os.listdir(d)):
+        if fn == "index.json" or not fn.endswith(".json"):
+            continue
+        rec = json.load(open(os.path.join(d, fn), encoding="utf-8"))
+        name = rec["name"]
+        kind = rec["kind"]
+
+        if kind == "evidence_epoch":
+            root, records = evidence_mod.epoch_tree(rec["inputs"]["batches"])
+            check(f"{name}: evidence_epoch_root", root.hex(), rec["evidence_epoch_root_hex"])
+            want = rec["ordered_leaves"]
+            check(f"{name}: ordered leaf count", len(records), len(want))
+            for r, w in zip(records, want):
+                check(f"{name}: ordered leaf_hash[{r['position']}]", r["leaf_hash_hex"], w["leaf_hash_hex"])
+        elif kind == "evidence_signer_set":
+            root, records = evidence_mod.signer_subtree(rec["inputs"]["signer_pubkeys_base58"])
+            check(f"{name}: signer_set_root", root.hex(), rec["signer_set_root_hex"])
+            for r, w in zip(records, rec["ordered_leaves"]):
+                check(f"{name}: signer leaf_hash[{r['position']}]", r["leaf_hash_hex"], w["leaf_hash_hex"])
+        elif kind == "evidence_observation_set":
+            root, records = evidence_mod.observation_subtree(
+                rec["inputs"]["payload_commitment_hexes"]
+            )
+            check(f"{name}: observations_root", root.hex(), rec["observations_root_hex"])
+            for r, w in zip(records, rec["ordered_leaves"]):
+                check(f"{name}: obs leaf_hash[{r['position']}]", r["leaf_hash_hex"], w["leaf_hash_hex"])
+        elif kind == "evidence_empty_tree":
+            check(f"{name}: empty epoch root", evidence_mod.epoch_tree([])[0].hex(), z)
+            check(f"{name}: empty signer root", evidence_mod.signer_subtree([])[0].hex(), z)
+            check(f"{name}: empty obs root", evidence_mod.observation_subtree([])[0].hex(), z)
+            check(f"{name}: published empty_root", rec["empty_root_hex"], z)
+        elif kind == "evidence_signer_not_32_error":
+            check(f"{name}: expected_result is reject", rec["expected_result"], "reject")
+            raised = False
+            try:
+                evidence_mod.signer_pubkey_be32(rec["inputs"]["signer_pubkey_base58"])
+            except ValueError:
+                raised = True
+            check(f"{name}: non-32-byte signer_pubkey is REJECTED (hard error)", raised, True)
+        else:
+            _failures.append((f"{name}: unknown evidence kind", kind, "a known evidence kind"))
+
+
 def main() -> int:
     verify_serialization()
     verify_assignment()
+    verify_reward()
+    verify_evidence()
     verify_adversarial()
     if _failures:
         print("DIVERGENCE (first %d shown):" % min(len(_failures), 10))
@@ -185,8 +332,9 @@ def main() -> int:
             print(f"  {label}\n     got : {got}\n     want: {want}")
         return 1
     print(
-        "OK: all serialization + assignment vectors re-derived and match; "
-        "all adversarial fixtures confirmed rejectable."
+        "OK: all serialization + assignment (incl. switchback + matched_cluster) + "
+        "reward + evidence vectors re-derived and match; all adversarial + hard-error "
+        "fixtures confirmed rejectable."
     )
     return 0
 

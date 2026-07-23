@@ -1,1 +1,2 @@
-- [Evidence serialization pinning](evidence-serialization-pinning.md) — §6.5 three-tree Merkle rules, evidence.example CJSON anchor (1040 B / 901b08d5…), open base58-decode advisory
+- [Evidence serialization pinning](evidence-serialization-pinning.md) — §6.5 three-tree Merkle rules, evidence.example CJSON anchor (1040 B / 901b08d5…), base58 advisory RESOLVED + evidence golden vectors landed
+- [v1.1 golden vectors catalog](v1_1-golden-vectors-catalog.md) — ratified roots for reward (§6.6), switchback+matched_cluster (§7.4), evidence (§6.5); sim non-ASCII parity PASS; canonical rules each pins

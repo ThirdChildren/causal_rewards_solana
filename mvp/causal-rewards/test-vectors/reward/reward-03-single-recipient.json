@@ -1,0 +1,32 @@
+{
+  "name": "reward-03-single-recipient",
+  "kind": "reward_positive",
+  "spec_section": "serialization.md §6.6 + reward-policy.md Stage 2 (aggregate-one-leaf-per-recipient)",
+  "exercises": "single-recipient base case: one leaf at leaf_index 0; reward_root == leaf_hash(sole leaf) (no interior node). Merkle base case for the reward tree.",
+  "leaf_hash_formula": "SHA-256(0x00 || 'CRP:reward:v1' || recipient(32) || amount_base_units(u64 BE) || leaf_index(u64 BE))",
+  "node_hash_formula": "SHA-256(0x01 || left || right)",
+  "ordering": "aggregate Σ over cohorts per recipient; DROP zero-sum recipients; rank ascending by recipient(BE32, unique key) then amount_base_units; leaf_index = 0-based rank; leaves placed by leaf_index contiguous from 0",
+  "inputs": {
+    "contributions": [
+      {
+        "recipient_hex": "7777777777777777777777777777777777777777777777777777777777777777",
+        "cohort_id": "cohort-A",
+        "amount_base_units": "1000"
+      }
+    ]
+  },
+  "aggregate_recipient_amount_map": {
+    "7777777777777777777777777777777777777777777777777777777777777777": "1000"
+  },
+  "dropped_zero_sum_recipients_hex": [],
+  "leaves": [
+    {
+      "leaf_index": "0",
+      "recipient_hex": "7777777777777777777777777777777777777777777777777777777777777777",
+      "amount_base_units": "1000",
+      "leaf_content_hex": "777777777777777777777777777777777777777777777777777777777777777700000000000003e80000000000000000",
+      "leaf_hash_hex": "b882c8992309c1269d9e9d6b887faeb2c2361ea112d5c495fe00c520d8655ced"
+    }
+  ],
+  "reward_root_hex": "b882c8992309c1269d9e9d6b887faeb2c2361ea112d5c495fe00c520d8655ced"
+}

@@ -1,0 +1,68 @@
+{
+  "name": "reward-01-multi-recipient-ordering",
+  "kind": "reward_positive",
+  "spec_section": "serialization.md §6.6 + reward-policy.md Stage 2 (aggregate-one-leaf-per-recipient)",
+  "exercises": "multiple distinct recipients: input order differs from the sorted (recipient BE32 ascending) leaf order; two recipients each earn across TWO cohorts, aggregated by integer Σ. Proves ranking + leaf_index assignment + Σ-over-cohorts.",
+  "leaf_hash_formula": "SHA-256(0x00 || 'CRP:reward:v1' || recipient(32) || amount_base_units(u64 BE) || leaf_index(u64 BE))",
+  "node_hash_formula": "SHA-256(0x01 || left || right)",
+  "ordering": "aggregate Σ over cohorts per recipient; DROP zero-sum recipients; rank ascending by recipient(BE32, unique key) then amount_base_units; leaf_index = 0-based rank; leaves placed by leaf_index contiguous from 0",
+  "inputs": {
+    "contributions": [
+      {
+        "recipient_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "cohort_id": "cohort-A",
+        "amount_base_units": "70"
+      },
+      {
+        "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "cohort_id": "cohort-B",
+        "amount_base_units": "50"
+      },
+      {
+        "recipient_hex": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+        "cohort_id": "cohort-C",
+        "amount_base_units": "5"
+      },
+      {
+        "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "cohort_id": "cohort-A",
+        "amount_base_units": "100"
+      },
+      {
+        "recipient_hex": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+        "cohort_id": "cohort-B",
+        "amount_base_units": "25"
+      }
+    ]
+  },
+  "aggregate_recipient_amount_map": {
+    "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a": "30",
+    "1111111111111111111111111111111111111111111111111111111111111111": "150",
+    "2222222222222222222222222222222222222222222222222222222222222222": "70"
+  },
+  "dropped_zero_sum_recipients_hex": [],
+  "leaves": [
+    {
+      "leaf_index": "0",
+      "recipient_hex": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+      "amount_base_units": "30",
+      "leaf_content_hex": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a000000000000001e0000000000000000",
+      "leaf_hash_hex": "e73068cebde0e235d200b7d1858bff3c2169d522720b515f00bcffe4b6ab83cf"
+    },
+    {
+      "leaf_index": "1",
+      "recipient_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "amount_base_units": "150",
+      "leaf_content_hex": "111111111111111111111111111111111111111111111111111111111111111100000000000000960000000000000001",
+      "leaf_hash_hex": "a63e815c735eee75ccadf1d3bb151c1c7488638f9da712bdee6ba778999650bd"
+    },
+    {
+      "leaf_index": "2",
+      "recipient_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "amount_base_units": "70",
+      "leaf_content_hex": "222222222222222222222222222222222222222222222222222222222222222200000000000000460000000000000002",
+      "leaf_hash_hex": "2b4be0fe59f8778b27f72b604d3914072dbb99042ad5d43b56a6dd69459a0185"
+    }
+  ],
+  "reward_root_hex": "a9c35cf41603d593c123e962f41fc47a2d750cf1e536b177f2454ace647fc171"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "evidence-04-empty-tree",
+  "kind": "evidence_empty_tree",
+  "spec_section": "serialization.md §6.4 (empty tree) + §6.5",
+  "exercises": "empty-tree sentinel: an evidence tree (epoch / signer / observation) with ZERO leaves has root = 32 zero bytes — an unmistakable 'nothing committed' sentinel, never SHA-256(DOMAIN_TAG).",
+  "inputs": {
+    "leaves": []
+  },
+  "empty_root_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+}

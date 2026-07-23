@@ -1,0 +1,159 @@
+{
+  "name": "assign-14-matched-pairs-2x2",
+  "spec_section": "serialization.md §7.4 (matched_cluster derivation) + §6/§7.5 (assignment tree)",
+  "exercises": "matched_cluster canonical MATCHED PAIRS: two strata, each m_s=2, treated_fraction_micro=500000 -> k_s=round_he(1.0)=1 (exactly one of each pair treated). Ranked by (full-id prf, member_index).",
+  "inputs": {
+    "experiment_id": "exp-2026-matched-009",
+    "seed_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "cohort_ids": [
+      "pair-1|0",
+      "pair-1|1",
+      "pair-2|0",
+      "pair-2|1"
+    ],
+    "design": "matched_cluster",
+    "params": {
+      "treated_fraction_micro": "500000"
+    }
+  },
+  "step1_seed_commitment": {
+    "domain": "CRP-seed-commit-v1",
+    "note": "commitment = SHA-256(domain || seed); frozen BEFORE the seed is revealed",
+    "seed_commitment_hex": "87bef364125c03ec19af00fcc7b48c397b32a0528215c16b318113d1e80b86e7"
+  },
+  "step2_cohort_prf": {
+    "domain": "CRP-assign-v1",
+    "note": "prf_u64(FULL composite cohort_id) = int(SHA-256(domain || seed || u32be(len exp) || exp || u32be(len cohort) || cohort)[:8], big-endian). Auditable intermediate; the per-design decision input is in the design block.",
+    "values": [
+      {
+        "cohort_id": "pair-1|0",
+        "prf_u64": "16719136669054099631"
+      },
+      {
+        "cohort_id": "pair-1|1",
+        "prf_u64": "2878652743811028048"
+      },
+      {
+        "cohort_id": "pair-2|0",
+        "prf_u64": "6307033504546410730"
+      },
+      {
+        "cohort_id": "pair-2|1",
+        "prf_u64": "5105855236832104562"
+      }
+    ]
+  },
+  "step2b_matched_cluster_derivation": {
+    "note": "per stratum s: k_s = round_half_even(frac * m_s / 1e6) clamped [0,m_s]; rank members ascending by (prf_u64(FULL id), member_index); first k_s -> treatment.",
+    "treated_fraction_micro": "500000",
+    "per_stratum": [
+      {
+        "group": "pair-1",
+        "m_s": "2",
+        "frac_times_m_s": "1000000",
+        "k_s": "1",
+        "ranked_members": [
+          {
+            "rank": "0",
+            "cohort_id": "pair-1|1",
+            "member_index": "1",
+            "prf_u64": "2878652743811028048",
+            "arm": "treatment"
+          },
+          {
+            "rank": "1",
+            "cohort_id": "pair-1|0",
+            "member_index": "0",
+            "prf_u64": "16719136669054099631",
+            "arm": "control"
+          }
+        ]
+      },
+      {
+        "group": "pair-2",
+        "m_s": "2",
+        "frac_times_m_s": "1000000",
+        "k_s": "1",
+        "ranked_members": [
+          {
+            "rank": "0",
+            "cohort_id": "pair-2|1",
+            "member_index": "1",
+            "prf_u64": "5105855236832104562",
+            "arm": "treatment"
+          },
+          {
+            "rank": "1",
+            "cohort_id": "pair-2|0",
+            "member_index": "0",
+            "prf_u64": "6307033504546410730",
+            "arm": "control"
+          }
+        ]
+      }
+    ]
+  },
+  "step3_summary": {
+    "treatment_count": "2",
+    "control_count": "2"
+  },
+  "step4_leaves": {
+    "merkle_domain_tag": "CRP:assignment:v1",
+    "leaf_hash_formula": "SHA-256(0x00 || domain_tag || leaf_canonical_bytes)",
+    "node_hash_formula": "SHA-256(0x01 || left || right)",
+    "leaf_order": "FULL composite cohort_id ascending (UTF-16 code-unit)",
+    "leaves": [
+      {
+        "cohort_id": "pair-1|0",
+        "arm": "control",
+        "prf_u64": "16719136669054099631",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "pair-1|0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"pair-1|0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22706169722d317c30227d",
+        "leaf_hash_hex": "8567e56ac82a5d34273698bb3e6fac32d7641c0b17a3b901c4572b66bc57a23f"
+      },
+      {
+        "cohort_id": "pair-1|1",
+        "arm": "treatment",
+        "prf_u64": "2878652743811028048",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "pair-1|1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"pair-1|1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22706169722d317c31227d",
+        "leaf_hash_hex": "17fa4a4739b6f54013361de627c5de4401483d8907eac658f4ff54d8fca798a4"
+      },
+      {
+        "cohort_id": "pair-2|0",
+        "arm": "control",
+        "prf_u64": "6307033504546410730",
+        "leaf_object": {
+          "arm": "control",
+          "cohort_id": "pair-2|0"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"control\",\"cohort_id\":\"pair-2|0\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a22636f6e74726f6c222c22636f686f72745f6964223a22706169722d327c30227d",
+        "leaf_hash_hex": "0e72bf106938b47f7af7f6dc0db22318bdb00652deca525b2000520291ab8f64"
+      },
+      {
+        "cohort_id": "pair-2|1",
+        "arm": "treatment",
+        "prf_u64": "5105855236832104562",
+        "leaf_object": {
+          "arm": "treatment",
+          "cohort_id": "pair-2|1"
+        },
+        "leaf_canonical_bytes_utf8": "{\"arm\":\"treatment\",\"cohort_id\":\"pair-2|1\"}",
+        "leaf_canonical_bytes_hex": "7b2261726d223a2274726561746d656e74222c22636f686f72745f6964223a22706169722d327c31227d",
+        "leaf_hash_hex": "030ffd4d80cf29d8c978e4ea3fdb7a97e117c59c90982c68c5618df41c51d993"
+      }
+    ]
+  },
+  "step5_assignment_root": {
+    "assignment_root_hex": "e67ebfe91bdc574095b2c54aa15e03b2320eb22fae638472e52e55b35ab8fdc1"
+  }
+}
