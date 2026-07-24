@@ -180,8 +180,18 @@ def stage1_valuation(
     samples: Mapping[str, CohortSample],
     *,
     identification: IdentificationMode = IdentificationMode.WITHIN_COHORT,
+    selected_cohorts: frozenset[str] | None = None,
 ) -> Stage1Result:
-    """Value every cohort from its conservative causal effect. Deterministic, integer-only."""
+    """Value every cohort from its conservative causal effect. Deterministic, integer-only.
+
+    ``selected_cohorts`` is an OPTIONAL cross-cohort multiplicity selection layer (see
+    ``docs/multiplicity-study.md``). When ``None`` (the FROZEN DEFAULT — do not change) it has no
+    effect: every eligible, identified cohort is valued exactly as the frozen one-sided policy
+    dictates. When a set is supplied, any candidate cohort whose id is NOT in the set is forced to
+    ``conservative_s = 0`` — treated exactly like a cohort that fails the minimum-sample rule — so
+    it earns no allocation. This is a *comparison harness only*; adopting a regime as the default
+    would add a frozen manifest field and is a hash-moving v1.2 migration, not done here.
+    """
     rp = manifest.reward_policy
     plan = manifest.analysis_plan
     scale = rp.effect_scale
@@ -220,14 +230,21 @@ def stage1_valuation(
         if sample.eligible:
             n_eligible += 1
 
-        if sample.eligible and identified and not design_blocked:
+        payable = sample.eligible and identified and not design_blocked
+        deselected = (
+            payable and selected_cohorts is not None and cid not in selected_cohorts
+        )
+        if deselected:
+            reasons.append("excluded_by_cross_cohort_multiplicity_regime")
+
+        if payable and not deselected:
             improvement_s = improvement_from_effect(effect_s, manifest)
             margin_s = nm.round_half_even_div(cv_micro * se_s, _PPM)
             conservative_s = max(0, improvement_s - margin_s)
         else:
             improvement_s = improvement_from_effect(effect_s, manifest) if eff else 0
             margin_s = nm.round_half_even_div(cv_micro * se_s, _PPM)
-            conservative_s = 0  # forced (Invariant 3)
+            conservative_s = 0  # forced (Invariant 3 / not selected by the regime)
 
         valuations.append(
             CohortValuation(
@@ -382,9 +399,17 @@ def compile_rewards(
     participants: Iterable[ParticipantRow],
     *,
     identification: IdentificationMode = IdentificationMode.WITHIN_COHORT,
+    selected_cohorts: frozenset[str] | None = None,
 ) -> RewardCompilation:
-    """Full Stage-1 -> Stage-2 -> aggregate-leaf-set -> ``reward_root`` compilation."""
-    s1 = stage1_valuation(manifest, effects, samples, identification=identification)
+    """Full Stage-1 -> Stage-2 -> aggregate-leaf-set -> ``reward_root`` compilation.
+
+    ``selected_cohorts`` (default ``None`` = frozen behavior) forwards the optional multiplicity
+    selection layer to :func:`stage1_valuation`; see it for the contract.
+    """
+    s1 = stage1_valuation(
+        manifest, effects, samples, identification=identification,
+        selected_cohorts=selected_cohorts,
+    )
     rows = stage2_split(manifest, s1, participants)
     return finalize_leaves(s1, rows)
 

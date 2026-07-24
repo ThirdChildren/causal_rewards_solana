@@ -7,11 +7,11 @@ orchestrator reconciles against it. The engine does not write into the bundle as
 
 | File | Schema id | Committed? | Notes |
 | --- | --- | --- | --- |
-| `analysis.json` | `crp.analysis/v1` | **yes** — SHA-256 over its canonical bytes | the evaluation artifact `submit_evaluation` anchors |
-| `rewards.parquet` | `crp.rewards/v1` | no (mirror is) | per-(cohort, recipient) Stage-2 detail |
-| `rewards.canonical.json` | `crp.rewards/v1` | **yes** | byte-stable mirror of `rewards.parquet` |
-| `reward_leaves.parquet` | `crp.reward_leaves/v1` | no (mirror is) | the RATIFIED aggregate on-chain leaf set |
-| `reward_leaves.canonical.json` | `crp.reward_leaves/v1` | **yes** | byte-stable mirror; carries `reward_root_hex` |
+| `analysis.json` | `crp.analysis/v1` | **yes** — SHA-256 over its canonical bytes | the evaluation artifact `submit_evaluation` anchors; carries top-level `evidence_epoch_roots` (echoed from the assembler) |
+| `rewards.parquet` | `crp.reward_leaves/v1` | no (mirror is) | the RATIFIED aggregate on-chain **leaf set** = settlement source (bundle-seam §1.2) |
+| `rewards.canonical.json` | `crp.reward_leaves/v1` | **yes** | byte-stable mirror of the leaf set; carries `reward_root_hex` |
+| `rewards_detail.parquet` | `crp.rewards_detail/v1` | no (mirror is) | per-(cohort, recipient) Stage-2 detail — supplementary auditability, NOT settlement |
+| `rewards_detail.canonical.json` | `crp.rewards_detail/v1` | **yes** | byte-stable mirror of `rewards_detail.parquet` |
 | `provenance.json` | `crp.engine_provenance/v1` | **no, by design** | environment only; excluded from every hash |
 | `engine_hashes.json` | `crp.engine_hashes/v1` | no | convenience index of the above hashes |
 
@@ -40,6 +40,7 @@ Scale suffixes: `_s` = the manifest's `positive_improvement_transform.effect_sca
   "spec_version":  "<manifest spec_version>",
   "experiment_id": "<string>",
   "manifest_hash": "sha256:<64hex>",         # over the canonical bytes of the frozen manifest
+  "evidence_epoch_roots": [ "<hex>", ... ],  # echoed INPUT from the assembler, ascending epoch order
 
   "engine": { "name", "version",
               "analysis_container_digest",    # echoed from the frozen analysis_plan
@@ -120,10 +121,28 @@ allocation         = reward_curve(conservative_s)          # frozen piecewise-li
 
 ---
 
-## `rewards.parquet` (`crp.rewards/v1`)
+## `rewards.parquet` (`crp.reward_leaves/v1`) — the on-chain leaf set (settlement source)
 
-Per-(cohort, recipient) Stage-2 detail — the audit-bundle table `reward-policy.md` refers to.
-Sorted by `(cohort_id, recipient)`.
+The RATIFIED aggregate leaf set — exactly what the reward Merkle tree commits and what settlement
+claims against (bundle-seam §1.2). One row per leaf, ordered by `leaf_index` ascending, contiguous
+from 0.
+
+| column | arrow type | meaning |
+| --- | --- | --- |
+| `leaf_index` | `uint64` | 0-based rank; also the `ClaimReceipt` nullifier key |
+| `recipient_hex` | `string` | unique primary key of the leaf set; 64 lowercase hex (presentation only) |
+| `amount_base_units` | `uint64` | `Σ_c leaf_i(c)`, always > 0 |
+| `leaf_hash_hex` | `string` | `SHA-256(0x00 ‖ "CRP:reward:v1" ‖ recipient ‖ amount_be ‖ index_be)` |
+
+The canonical mirror (`rewards.canonical.json`) additionally carries `reward_root_hex` and
+`leaf_set_shape`. An empty leaf set (fully-null distribution) has `reward_root_hex = "00"*32`
+(§6.4). The `recipient_hex`/`recipient_pubkey` column dtype is presentation only — the §6.6 leaf
+preimage consumes the 32 raw bytes, so it never enters any committed hash.
+
+## `rewards_detail.parquet` (`crp.rewards_detail/v1`) — supplementary auditability (not settlement)
+
+Per-(cohort, recipient) Stage-2 detail — the split table `reward-policy.md` refers to. Aggregates
+to the leaf set above. Sorted by `(cohort_id, recipient)`.
 
 | column | arrow type | meaning |
 | --- | --- | --- |
@@ -136,21 +155,6 @@ Sorted by `(cohort_id, recipient)`.
 | `recipient_aggregate_base_units` | `uint64` | `Σ_c leaf_i(c)` for this recipient |
 | `leaf_index` | `uint64` (nullable) | the recipient's on-chain leaf index; **null** if omitted |
 | `included_in_leaf_set` | `bool` | false ⇒ zero aggregate, omitted per §6.6 |
-
-## `reward_leaves.parquet` (`crp.reward_leaves/v1`)
-
-The RATIFIED aggregate leaf set — exactly what the reward Merkle tree commits. One row per leaf,
-ordered by `leaf_index` ascending, contiguous from 0.
-
-| column | arrow type | meaning |
-| --- | --- | --- |
-| `leaf_index` | `uint64` | 0-based rank; also the `ClaimReceipt` nullifier key |
-| `recipient_hex` | `string` | unique primary key of the leaf set |
-| `amount_base_units` | `uint64` | `Σ_c leaf_i(c)`, always > 0 |
-| `leaf_hash_hex` | `string` | `SHA-256(0x00 ‖ "CRP:reward:v1" ‖ recipient ‖ amount_be ‖ index_be)` |
-
-The canonical mirror additionally carries `reward_root_hex` and `leaf_set_shape`. An empty leaf
-set (fully-null distribution) has `reward_root_hex = "00"*32` (§6.4).
 
 ## `provenance.json` (`crp.engine_provenance/v1`)
 

@@ -33,11 +33,13 @@ def test_analysis_top_level_schema(demo_run) -> None:
     obj = run.analysis
     assert obj["schema"] == ANALYSIS_SCHEMA
     assert set(obj) == {
-        "schema", "spec_version", "experiment_id", "manifest_hash", "engine", "estimand",
-        "design", "analysis_plan", "identification", "primary_estimate", "balance",
-        "sensitivity", "cohorts", "excluded_records", "reward_summary",
+        "schema", "spec_version", "experiment_id", "manifest_hash", "evidence_epoch_roots",
+        "engine", "estimand", "design", "analysis_plan", "identification", "primary_estimate",
+        "balance", "sensitivity", "cohorts", "excluded_records", "reward_summary",
     }
     assert obj["manifest_hash"].startswith("sha256:")
+    # evidence_epoch_roots is an echoed INPUT; empty (list) when there is no bundle handoff.
+    assert obj["evidence_epoch_roots"] == []
     assert obj["engine"]["analysis_container_digest"].startswith("sha256:")
     assert obj["engine"]["reference_source_digest"].startswith("sha256:")
 
@@ -81,27 +83,22 @@ def test_reward_summary_is_internally_consistent(demo_run) -> None:
     assert len(rs["reward_root_hex"]) == 64
 
 
-def test_rewards_parquet_schema(demo_run) -> None:
-    _, out, _ = demo_run
-    t = pq.read_table(out / "rewards.parquet")
-    assert t.schema.names == [
-        "cohort_id", "recipient_hex", "weight", "cohort_weight_total",
-        "cohort_budget_base_units", "amount_base_units",
-        "recipient_aggregate_base_units", "leaf_index", "included_in_leaf_set",
-    ]
-    mirror = json.loads((out / "rewards.canonical.json").read_text(encoding="utf-8"))
-    assert mirror["schema"] == REWARDS_SCHEMA
-    assert len(mirror["rows"]) == t.num_rows
-
-
-def test_reward_leaves_parquet_matches_the_committed_root(demo_run) -> None:
+def test_rewards_parquet_is_the_on_chain_leaf_set(demo_run) -> None:
+    """RATIFIED seam (§1.2): the bundle's ``rewards.parquet`` IS the leaf set = settlement source."""
     run, out, _ = demo_run
-    t = pq.read_table(out / "reward_leaves.parquet")
+    t = pq.read_table(out / "rewards.parquet")
     assert t.schema.names == ["leaf_index", "recipient_hex", "amount_base_units", "leaf_hash_hex"]
-    mirror = json.loads((out / "reward_leaves.canonical.json").read_text(encoding="utf-8"))
+    # One row per recipient, leaf_index ascending contiguous from 0.
+    idx = t.column("leaf_index").to_pylist()
+    assert idx == list(range(t.num_rows))
+    rec = t.column("recipient_hex").to_pylist()
+    assert all(len(h) == 64 and h == h.lower() for h in rec)
+    assert len(set(rec)) == len(rec)  # unique recipient per row (aggregate shape)
+
+    mirror = json.loads((out / "rewards.canonical.json").read_text(encoding="utf-8"))
     assert mirror["schema"] == LEAVES_SCHEMA
     assert mirror["reward_root_hex"] == run.compilation.reward_root_hex
-    # Recompute the root from the published leaves alone.
+    # Recompute the root from the published leaf set alone.
     from crp_engine.reference import RewardLeaf, reward_root
 
     leaves = [
@@ -112,14 +109,56 @@ def test_reward_leaves_parquet_matches_the_committed_root(demo_run) -> None:
     assert reward_root(leaves).hex() == run.compilation.reward_root_hex
 
 
-def test_rewards_detail_aggregates_to_the_leaves(demo_run) -> None:
+def test_rewards_detail_parquet_schema(demo_run) -> None:
+    _, out, _ = demo_run
+    t = pq.read_table(out / "rewards_detail.parquet")
+    assert t.schema.names == [
+        "cohort_id", "recipient_hex", "weight", "cohort_weight_total",
+        "cohort_budget_base_units", "amount_base_units",
+        "recipient_aggregate_base_units", "leaf_index", "included_in_leaf_set",
+    ]
+    mirror = json.loads((out / "rewards_detail.canonical.json").read_text(encoding="utf-8"))
+    assert mirror["schema"] == REWARDS_SCHEMA
+    assert len(mirror["rows"]) == t.num_rows
+
+
+def test_rewards_detail_aggregates_to_the_leaf_set(demo_run) -> None:
     run, out, _ = demo_run
-    t = pq.read_table(out / "rewards.parquet").to_pylist()
+    detail = pq.read_table(out / "rewards_detail.parquet").to_pylist()
     agg: dict[str, int] = {}
-    for row in t:
+    for row in detail:
         agg[row["recipient_hex"]] = agg.get(row["recipient_hex"], 0) + row["amount_base_units"]
     leaves = {lf.recipient.hex(): lf.amount_base_units for lf in run.compilation.leaves}
     assert {k: v for k, v in agg.items() if v != 0} == leaves
+
+
+def test_evidence_epoch_roots_are_echoed_verbatim_in_order(tmp_path) -> None:
+    """The assembler's ordered epoch roots pass through to analysis.json top level, unchanged."""
+    spec = json.loads(SPEC_MANIFEST.read_text(encoding="utf-8"))
+    paths = write_demo(tmp_path, spec, SEED)
+    m = Manifest.from_path(paths["manifest"])
+    roots = ["aa" * 32, "bb" * 32, "cc" * 32]  # ascending epoch order, as built by the assembler
+    run = analyze(m, paths["panel"], paths["participants"], seed=SEED, evidence_epoch_roots=roots)
+    assert run.analysis["evidence_epoch_roots"] == roots  # verbatim, order preserved
+
+    out = tmp_path / "out"
+    write_all(run, out)
+    obj = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    assert obj["evidence_epoch_roots"] == roots
+    # It is echoed input, not derived: the engine must not reorder or transform it.
+    from crp_engine.reference import canonical_json_bytes
+
+    assert canonical_json_bytes(obj) == (out / "analysis.json").read_bytes()
+
+
+def test_evidence_epoch_roots_reject_number_tokens(tmp_path) -> None:
+    """A non-string epoch root would smuggle a JSON number into a hashed artifact."""
+    spec = json.loads(SPEC_MANIFEST.read_text(encoding="utf-8"))
+    paths = write_demo(tmp_path, spec, SEED)
+    m = Manifest.from_path(paths["manifest"])
+    with pytest.raises(TypeError):
+        analyze(m, paths["panel"], paths["participants"], seed=SEED,
+                evidence_epoch_roots=[123])  # type: ignore[list-item]
 
 
 def test_provenance_carries_no_wall_clock(demo_run) -> None:

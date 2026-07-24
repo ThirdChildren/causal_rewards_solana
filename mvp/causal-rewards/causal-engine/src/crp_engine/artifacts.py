@@ -1,4 +1,4 @@
-"""Artifact emission: ``analysis.json``, ``rewards.parquet``, ``reward_leaves.parquet``.
+"""Artifact emission: ``analysis.json``, ``rewards.parquet``, ``rewards_detail.parquet``.
 
 Two hard rules, both from ``specs/serialization.md``:
 
@@ -10,11 +10,18 @@ Two hard rules, both from ``specs/serialization.md``:
    unit; arrays keep declared order. ``analysis_hash`` is SHA-256 over exactly those bytes — this
    is the value ``submit_evaluation`` anchors on chain.
 
+**Bundle-seam contract (RATIFIED, ``docs/m3-integration-and-spec-round.md`` §1).** The audit
+bundle's ``rewards.parquet`` IS the on-chain **leaf set**: exactly one row per recipient, columns
+``(leaf_index, recipient_hex, amount_base_units, leaf_hash_hex)``, ``leaf_index`` ascending
+contiguous from 0. This is the file the reward root commits and what settlement claims against.
+The engine's per-(cohort, recipient) Stage-2 **detail** table is supplementary auditability (the
+CRP-WS1 split) and is emitted as ``rewards_detail.parquet`` — it is NOT the settlement source.
+
 Parquet is *convenience output*. Parquet bytes are not a stable commitment target (writer
 version, statistics, row-group layout all leak in), so — exactly as the simulator does for its
 content hash — every parquet table also gets a canonical-JSON mirror whose SHA-256 is the
-committed number. ``rewards.parquet`` remains the audit-bundle table; ``rewards.canonical.json``
-is what a verifier hashes.
+committed number. ``rewards.parquet`` carries the leaf set; ``rewards.canonical.json`` is what a
+verifier hashes for it. ``rewards_detail.parquet`` mirrors to ``rewards_detail.canonical.json``.
 
 Scales used in ``analysis.json``:
 
@@ -49,12 +56,14 @@ __all__ = [
     "build_analysis",
     "write_analysis",
     "write_rewards",
-    "write_leaves",
+    "write_rewards_detail",
     "build_provenance",
 ]
 
 ANALYSIS_SCHEMA = "crp.analysis/v1"
-REWARDS_SCHEMA = "crp.rewards/v1"
+#: Schema tag of the per-(cohort, recipient) Stage-2 detail mirror (``rewards_detail.canonical.json``).
+REWARDS_SCHEMA = "crp.rewards_detail/v1"
+#: Schema tag of the on-chain leaf-set mirror (``rewards.canonical.json``).
 LEAVES_SCHEMA = "crp.reward_leaves/v1"
 
 _MICRO = -6
@@ -114,8 +123,22 @@ def build_analysis(
     compilation: RewardCompilation,
     engine_version: str,
     reference_digest: str,
+    evidence_epoch_roots: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """Assemble the ``analysis.json`` object. Pure function of its inputs — no wall-clock."""
+    """Assemble the ``analysis.json`` object. Pure function of its inputs — no wall-clock.
+
+    ``evidence_epoch_roots`` is an INPUT echoed from the bundle assembler (evidence-service): the
+    ordered (ascending epoch) list of per-epoch observation roots the assembler computed. The
+    engine does not derive it; it places it verbatim at the ``analysis.json`` top level so the
+    assembler can validate ``analysis.json.evidence_epoch_roots`` equals the roots it built
+    (``docs/m3-integration-and-spec-round.md`` §1.4). Each entry is a hex string, never a number
+    token. Default ``()`` renders an empty list for engine-only runs with no bundle handoff.
+    """
+    for r in evidence_epoch_roots:
+        if not isinstance(r, str):
+            raise TypeError(
+                "evidence_epoch_roots entries must be strings (hex roots), got %r" % type(r)
+            )
     scale = manifest.reward_policy.effect_scale
     plan = manifest.analysis_plan
     b_eff, b_se = primary.get("treated")
@@ -162,6 +185,7 @@ def build_analysis(
         "spec_version": manifest.spec_version,
         "experiment_id": manifest.experiment_id,
         "manifest_hash": manifest.manifest_hash,
+        "evidence_epoch_roots": [str(r) for r in evidence_epoch_roots],
         "engine": {
             "name": "crp-causal-engine",
             "version": engine_version,
@@ -306,10 +330,10 @@ def write_analysis(obj: Mapping[str, Any], out_dir: str | Path) -> tuple[Path, s
 
 
 # --------------------------------------------------------------------------------------
-# rewards.parquet / reward_leaves.parquet
+# rewards.parquet (leaf set = settlement source) / rewards_detail.parquet (audit detail)
 # --------------------------------------------------------------------------------------
 
-_REWARDS_FIELDS = pa.schema(
+_DETAIL_FIELDS = pa.schema(
     [
         pa.field("cohort_id", pa.string(), nullable=False),
         pa.field("recipient_hex", pa.string(), nullable=False),
@@ -335,7 +359,7 @@ _LEAVES_FIELDS = pa.schema(
 _PARQUET_KW = dict(compression="none", version="2.6", write_statistics=False)
 
 
-def _rewards_rows(compilation: RewardCompilation) -> list[dict[str, Any]]:
+def _detail_rows(compilation: RewardCompilation) -> list[dict[str, Any]]:
     agg: dict[bytes, int] = {}
     for r in compilation.split_rows:
         agg[r.recipient] = agg.get(r.recipient, 0) + r.amount_base_units
@@ -359,12 +383,60 @@ def _rewards_rows(compilation: RewardCompilation) -> list[dict[str, Any]]:
 
 
 def write_rewards(compilation: RewardCompilation, out_dir: str | Path) -> tuple[Path, str]:
-    """Write the per-(cohort, recipient) Stage-2 detail table + its canonical-JSON mirror."""
-    rows = _rewards_rows(compilation)
+    """Write the RATIFIED on-chain leaf set as the bundle's ``rewards.parquet``.
+
+    This is the settlement source (``docs/m3-integration-and-spec-round.md`` §1.2): exactly one
+    row per recipient, ordered by ``leaf_index`` ascending contiguous from 0, columns
+    ``(leaf_index, recipient_hex, amount_base_units, leaf_hash_hex)``. The mirror
+    ``rewards.canonical.json`` is what a verifier hashes; the reward root is committed over these
+    leaves. ``recipient_hex`` is 64 lowercase hex — presentation only; the §6.6 leaf preimage
+    consumes the 32 raw bytes, so the column dtype never enters any committed hash.
+    """
+    from crp_engine.reward_compiler import leaf_hash_hex
+
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    table = pa.Table.from_pylist(rows, schema=_REWARDS_FIELDS)
+    rows = [
+        {
+            "leaf_index": lf.leaf_index,
+            "recipient_hex": lf.recipient.hex(),
+            "amount_base_units": lf.amount_base_units,
+            "leaf_hash_hex": leaf_hash_hex(lf),
+        }
+        for lf in compilation.leaves
+    ]
+    table = pa.Table.from_pylist(rows, schema=_LEAVES_FIELDS)
     pq.write_table(table, out / "rewards.parquet", **_PARQUET_KW)
+    mirror = {
+        "schema": LEAVES_SCHEMA,
+        "reward_root_hex": compilation.reward_root_hex,
+        "leaf_set_shape": "aggregate_one_leaf_per_recipient",
+        "leaves": [
+            {
+                "leaf_index": _i(r["leaf_index"]),
+                "recipient_hex": r["recipient_hex"],
+                "amount_base_units": _i(r["amount_base_units"]),
+                "leaf_hash_hex": r["leaf_hash_hex"],
+            }
+            for r in rows
+        ],
+    }
+    data = canonical_json_bytes(mirror)
+    (out / "rewards.canonical.json").write_bytes(data)
+    return out / "rewards.parquet", "sha256:" + sha256_hex(data)
+
+
+def write_rewards_detail(compilation: RewardCompilation, out_dir: str | Path) -> tuple[Path, str]:
+    """Write the per-(cohort, recipient) Stage-2 detail table + its canonical-JSON mirror.
+
+    Supplementary auditability (the CRP-WS1 split), NOT the settlement source; emitted as
+    ``rewards_detail.parquet`` (``docs/m3-integration-and-spec-round.md`` §1.2).
+    """
+    rows = _detail_rows(compilation)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pylist(rows, schema=_DETAIL_FIELDS)
+    pq.write_table(table, out / "rewards_detail.parquet", **_PARQUET_KW)
 
     mirror = {
         "schema": REWARDS_SCHEMA,
@@ -384,44 +456,8 @@ def write_rewards(compilation: RewardCompilation, out_dir: str | Path) -> tuple[
         ],
     }
     data = canonical_json_bytes(mirror)
-    (out / "rewards.canonical.json").write_bytes(data)
-    return out / "rewards.parquet", "sha256:" + sha256_hex(data)
-
-
-def write_leaves(compilation: RewardCompilation, out_dir: str | Path) -> tuple[Path, str]:
-    """Write the RATIFIED aggregate leaf set (one row per on-chain reward leaf)."""
-    from crp_engine.reward_compiler import leaf_hash_hex
-
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    rows = [
-        {
-            "leaf_index": lf.leaf_index,
-            "recipient_hex": lf.recipient.hex(),
-            "amount_base_units": lf.amount_base_units,
-            "leaf_hash_hex": leaf_hash_hex(lf),
-        }
-        for lf in compilation.leaves
-    ]
-    table = pa.Table.from_pylist(rows, schema=_LEAVES_FIELDS)
-    pq.write_table(table, out / "reward_leaves.parquet", **_PARQUET_KW)
-    mirror = {
-        "schema": LEAVES_SCHEMA,
-        "reward_root_hex": compilation.reward_root_hex,
-        "leaf_set_shape": "aggregate_one_leaf_per_recipient",
-        "leaves": [
-            {
-                "leaf_index": _i(r["leaf_index"]),
-                "recipient_hex": r["recipient_hex"],
-                "amount_base_units": _i(r["amount_base_units"]),
-                "leaf_hash_hex": r["leaf_hash_hex"],
-            }
-            for r in rows
-        ],
-    }
-    data = canonical_json_bytes(mirror)
-    (out / "reward_leaves.canonical.json").write_bytes(data)
-    return out / "reward_leaves.parquet", "sha256:" + sha256_hex(data)
+    (out / "rewards_detail.canonical.json").write_bytes(data)
+    return out / "rewards_detail.parquet", "sha256:" + sha256_hex(data)
 
 
 @dataclass(frozen=True)

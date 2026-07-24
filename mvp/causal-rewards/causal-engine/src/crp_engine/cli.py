@@ -30,6 +30,19 @@ def _seed(value: str | None) -> bytes:
     return raw
 
 
+def _epoch_roots(value: str | None) -> tuple[str, ...]:
+    """Read the assembler's ordered evidence-epoch roots (JSON array file, or comma list)."""
+    if not value:
+        return ()
+    p = Path(value)
+    if p.is_file():
+        obj = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(obj, list) or not all(isinstance(x, str) for x in obj):
+            raise SystemExit("--evidence-epoch-roots file must be a JSON array of hex strings")
+        return tuple(obj)
+    return tuple(s for s in (part.strip() for part in value.split(",")) if s)
+
+
 def _cmd_analyze(args: argparse.Namespace) -> int:
     manifest = Manifest.from_path(args.manifest)
     run = analyze(
@@ -37,11 +50,13 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         args.panel,
         args.participants or (),
         seed=_seed(args.seed),
+        evidence_epoch_roots=_epoch_roots(args.evidence_epoch_roots),
     )
     hashes = write_all(run, args.out, source_commit=args.source_commit or "")
     s1 = run.compilation.stage1
     print("analysis.json          %s" % hashes["analysis.json"])
-    print("rewards.canonical.json %s" % hashes["rewards.canonical.json"])
+    print("rewards.canonical.json %s  (leaf set = settlement source)" % hashes["rewards.canonical.json"])
+    print("rewards_detail.json    %s" % hashes["rewards_detail.canonical.json"])
     print("reward_root            %s" % run.compilation.reward_root_hex)
     print("identification         %s" % run.panel.identification.value)
     print(
@@ -163,6 +178,11 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--participants")
     a.add_argument("--seed", help="32-byte committed seed, hex")
     a.add_argument("--source-commit", default="")
+    a.add_argument(
+        "--evidence-epoch-roots",
+        help="assembler's ordered evidence-epoch roots: a JSON-array file path or a comma list; "
+        "echoed verbatim into analysis.json.evidence_epoch_roots",
+    )
     a.add_argument("--out", required=True)
     a.set_defaults(fn=_cmd_analyze)
 

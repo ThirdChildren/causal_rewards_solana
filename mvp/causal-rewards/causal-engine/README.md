@@ -49,11 +49,13 @@ src/crp_engine/
   reward_compiler.py  # Stage-1 conservative valuation + Stage-2 CRP-WS1 split -> aggregate leaf set
   baselines.py        # activity / quality / scarcity / causal reward baselines
   adapters.py         # design adapters (cluster-randomized, switchback, matched_cluster, replay)
-  artifacts.py        # analysis.json / rewards.parquet / reward_leaves.parquet writers
+  artifacts.py        # analysis.json / rewards.parquet (leaf set) / rewards_detail.parquet writers
+  multiplicity.py     # cross-cohort false-positive regimes (none/Bonferroni/Šidák/BH) — study only
+  studies.py          # deterministic §2.1 multiplicity study -> docs/multiplicity-study.md
   run.py, cli.py      # `crp-engine analyze | vectors | digest`
   demo.py             # human-readable demo inputs (NOT a hashed path)
 docs/
-  artifact-schemas.md # analysis.json / rewards.parquet / reward_leaves.parquet / provenance.json
+  artifact-schemas.md # analysis.json / rewards.parquet / rewards_detail.parquet / provenance.json
   modeling-notes.md   # switchback + matched_cluster policy; identification modes; open spec proposals
 container.lock.json   # pinned build inputs; recipe_digest + reference_source_digest
 Dockerfile            # pinned analysis container
@@ -69,16 +71,20 @@ crp-engine vectors            # replay the ratified reward test vectors (accepta
 crp-engine digest             # print engine / reference / container digests
 ```
 
-`analyze` writes `analysis.json`, `rewards.parquet`, `reward_leaves.parquet`, and
+`analyze` writes `analysis.json`, `rewards.parquet`, `rewards_detail.parquet`, and
 `provenance.json`. Schemas: `docs/artifact-schemas.md`.
 
-> **Bundle-seam note (M3, in reconciliation):** the audit-bundle assembler in `evidence-service/`
-> currently expects a single `rewards.parquet` = the on-chain leaf set with column
-> `recipient_pubkey`, and an `analysis.json` carrying a top-level `evidence_epoch_roots`. This
-> engine emits the leaf set as `reward_leaves.parquet` (column `recipient_hex`) plus a per-cohort
-> detail `rewards.parquet`, and an `analysis.json` keyed `primary_estimate`/`reward_summary`. The
-> two contracts are being reconciled by the orchestrator before the verifier CLI is wired; see the
-> orchestrator project-state note. Do not treat either side's current file names as final.
+> **Bundle-seam contract (RATIFIED, `docs/m3-integration-and-spec-round.md` §1).** The bundle's
+> `rewards.parquet` **is the on-chain leaf set** — one row per recipient, columns
+> `(leaf_index, recipient_hex, amount_base_units, leaf_hash_hex)`, `leaf_index` ascending from 0.
+> It is what settlement claims against and what the reward root commits. `recipient_hex` is 64
+> lowercase hex (presentation only; the §6.6 leaf preimage consumes the 32 raw bytes, so the
+> column dtype never enters any committed hash — the `recipient_pubkey`/`recipient_hex` choice is
+> not hash-moving). The per-`(cohort, recipient)` Stage-2 split is supplementary auditability and
+> is emitted as `rewards_detail.parquet` (NOT the settlement source). `analysis.json` keeps its
+> richer `primary_estimate`/`reward_summary`/`cohorts` schema and additionally carries a top-level
+> `evidence_epoch_roots` (ascending epoch order) echoed from the assembler via
+> `analyze(..., evidence_epoch_roots=...)` or `crp-engine analyze --evidence-epoch-roots`.
 
 ## Determinism & acceptance gate
 

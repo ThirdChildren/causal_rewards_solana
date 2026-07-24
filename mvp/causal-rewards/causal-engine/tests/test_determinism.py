@@ -55,12 +55,12 @@ def test_two_fresh_processes_produce_identical_artifact_bytes(demo, tmp_path) ->
     hb = _run(b, demo, "77777")
 
     assert ha == hb, "engine hashes differ between fresh processes: %s vs %s" % (ha, hb)
-    for name in ("analysis.json", "rewards.canonical.json", "reward_leaves.canonical.json"):
+    for name in ("analysis.json", "rewards.canonical.json", "rewards_detail.canonical.json"):
         assert (a / name).read_bytes() == (b / name).read_bytes(), (
             "%s differs byte-for-byte between two fresh-process runs" % name
         )
     # Parquet is convenience output; under the pinned writer it is stable too.
-    for name in ("rewards.parquet", "reward_leaves.parquet"):
+    for name in ("rewards.parquet", "rewards_detail.parquet"):
         assert (a / name).read_bytes() == (b / name).read_bytes()
 
 

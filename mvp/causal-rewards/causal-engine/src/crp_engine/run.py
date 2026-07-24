@@ -6,7 +6,7 @@
         -> per-cohort effects
         -> sensitivity analyses (descriptive)
         -> Stage-1 conservative valuation -> Stage-2 split -> aggregate reward leaves + root
-        -> analysis.json / rewards.parquet / reward_leaves.parquet / provenance.json
+        -> analysis.json / rewards.parquet (leaf set) / rewards_detail.parquet / provenance.json
 
 Determinism contract for this module (CLAUDE.md invariant 2):
 
@@ -113,8 +113,15 @@ def analyze(
     *,
     seed: bytes = b"\x00" * 32,
     adjacency: Mapping[str, Sequence[str]] | None = None,
+    evidence_epoch_roots: Sequence[str] = (),
 ) -> AnalysisRun:
-    """Run the full pipeline. Pure function of (manifest, panel, participants, seed, adjacency)."""
+    """Run the full pipeline. Pure function of its inputs plus the committed seed.
+
+    ``evidence_epoch_roots`` is echoed straight into ``analysis.json`` (see
+    :func:`crp_engine.artifacts.build_analysis`): the ordered per-epoch observation roots the
+    bundle assembler computed, handed off in-process so the assembler can validate the field
+    against the roots it built. The engine never derives it.
+    """
     covariates = manifest.analysis_plan.covariate_adjustment
     panel = load_panel(panel_source, manifest, covariates=covariates)
 
@@ -145,6 +152,7 @@ def analyze(
         compilation=compilation,
         engine_version=__version__,
         reference_digest=reference_source_digest(),
+        evidence_epoch_roots=evidence_epoch_roots,
     )
     return AnalysisRun(
         manifest=manifest,
@@ -164,8 +172,8 @@ def write_all(run: AnalysisRun, out_dir: str | Path, *, source_commit: str = "")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     _, analysis_hash = artifacts.write_analysis(run.analysis, out)
-    _, rewards_hash = artifacts.write_rewards(run.compilation, out)
-    _, leaves_hash = artifacts.write_leaves(run.compilation, out)
+    _, rewards_hash = artifacts.write_rewards(run.compilation, out)  # leaf set -> rewards.parquet
+    _, detail_hash = artifacts.write_rewards_detail(run.compilation, out)  # -> rewards_detail.parquet
 
     import numpy as np
     import pyarrow as pa
@@ -189,8 +197,8 @@ def write_all(run: AnalysisRun, out_dir: str | Path, *, source_commit: str = "")
 
     hashes = {
         "analysis.json": analysis_hash,
-        "rewards.canonical.json": rewards_hash,
-        "reward_leaves.canonical.json": leaves_hash,
+        "rewards.canonical.json": rewards_hash,  # leaf set = settlement source
+        "rewards_detail.canonical.json": detail_hash,
         "reward_root_hex": run.compilation.reward_root_hex,
     }
     (out / "engine_hashes.json").write_bytes(
