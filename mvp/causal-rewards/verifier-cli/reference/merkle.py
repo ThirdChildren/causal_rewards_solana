@@ -36,6 +36,7 @@ __all__ = [
     "DOMAIN_REWARD",
     "leaf_hash",
     "node_hash",
+    "merkle_root_from_hashes",
     "merkle_root",
 ]
 
@@ -58,15 +59,20 @@ def node_hash(left: bytes, right: bytes) -> bytes:
     return sha256(NODE_PREFIX + left + right)
 
 
-def merkle_root(leaf_canonical_list: List[bytes], domain: bytes) -> bytes:
-    """Build the Merkle root from an ORDERED list of canonical leaf byte strings.
+def merkle_root_from_hashes(leaf_hashes: List[bytes]) -> bytes:
+    """Combine an ORDERED list of 32-byte LEAF HASHES into a root (odd-node promotion).
 
-    The caller is responsible for having already placed the leaves in the
-    tree's canonical order. This function does not reorder.
+    This is the sole promotion/combination implementation; ``merkle_root`` computes the
+    leaf hashes then delegates here. It exists so a verifier that already holds the leaf
+    hashes (e.g. the evidence epoch tree, whose leaf hashes are published in
+    ``roots.json`` / the evidence Parquet) rebuilds the root through the SAME node
+    formula and promotion rule rather than a second implementation. Mirrors the TS
+    ``merkleRootFromHashes`` and the on-chain ``crp_crypto::merkle_root_from_hashes``.
+    Empty input → 32 zero bytes (§6.4).
     """
-    if not leaf_canonical_list:
+    if not leaf_hashes:
         return EMPTY_ROOT
-    level = [leaf_hash(domain, lb) for lb in leaf_canonical_list]
+    level = list(leaf_hashes)
     while len(level) > 1:
         nxt: List[bytes] = []
         for i in range(0, len(level), 2):
@@ -76,3 +82,14 @@ def merkle_root(leaf_canonical_list: List[bytes], domain: bytes) -> bytes:
                 nxt.append(level[i])  # promote unpaired trailing node
         level = nxt
     return level[0]
+
+
+def merkle_root(leaf_canonical_list: List[bytes], domain: bytes) -> bytes:
+    """Build the Merkle root from an ORDERED list of canonical leaf byte strings.
+
+    The caller is responsible for having already placed the leaves in the
+    tree's canonical order. This function does not reorder.
+    """
+    if not leaf_canonical_list:
+        return EMPTY_ROOT
+    return merkle_root_from_hashes([leaf_hash(domain, lb) for lb in leaf_canonical_list])
