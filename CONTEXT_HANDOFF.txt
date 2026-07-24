@@ -82,7 +82,21 @@ M2 — Programs & SDK (wk 5-9) ......... ACCEPTED-PENDING-DEPLOY (NOT done; devn
     - state-machine v1.1 (H1/H2/M1 fixes) — protocol-behavior version 1.1.0, wire/hash contract
       1.0.0 UNCHANGED, manifest golden 74e0bb82... byte-identical.
 
-M3 — Evidence & causal engine (wk 10-14) ................... CORE LANDED, INTEGRATION OPEN
+M3 — Evidence & causal engine (wk 10-14) ................... GATE MET (accept blocked on M2 devnet)
+  ✅ ACCEPTANCE GATE DEMONSTRATED 2026-07-24 (orchestrator-verified): verifier-cli/ crp-verify
+     (commit a087efb) reproduces every root/hash from a published bundle OFFLINE, roots.json
+     untrusted — manifest 74e0bb82 / assignment c229b5cc / evidence-01 a13e1cdc / reward-01
+     a9c35cf4 on a real assembled golden-happy fixture → ACCEPT exit 0; 33 tests; adv-01..06 +
+     seam-tamper + substituted-root rejected; 3-way (Py/TS/on-chain) agreement on assignment +
+     §6.6 reward + seed/prf/merkle, Py+TS on JSON+evidence roots; deterministic. Soundness fix:
+     recomputed result_artifact_hash now compared vs untrusted roots.json.
+  ⚠ NOT formally accepted: gating rule bars M3 acceptance while the M2 devnet item is open.
+  Prior M3 work (all committed + orchestrator-verified):
+    evidence-service b15d4ef, causal-engine 11de232, bundle seam e16a9a2 + 2964128 (round-trip
+    verified reward-01 a9c35cf4 end-to-end), spec round 06a2df7 + 3252aab (Part A non-hash applied,
+    goldens intact; v1.2 migration + multiplicity = DRAFT proposals awaiting user sign-off).
+  OLD line kept below for context:
+M3 (superseded) — Evidence & causal engine (wk 10-14) ...... CORE LANDED, INTEGRATION OPEN
   Acceptance test: independent reproduction of result-artifact hash + reward roots
   from an audit bundle, with zero network access, no trust in coordinator/evaluator.
   Two core components delivered + orchestrator-verified (2026-07-24):

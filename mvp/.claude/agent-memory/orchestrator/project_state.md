@@ -18,6 +18,25 @@ metadata:
 - FOLLOW-UPS from architect: (B-notes) switchback schedule policy + matching-quality → causal-eng CONFIRMATION, non-blocking (bytes pinned), fold into causal-eng M3 task. (C-adjacent) multi-batch epoch sub-roots → singular on-chain EvidenceEpoch.{signer_set_root,observations_root} mapping — resolve (architect + solana-program-engineer) before evidence roots post on-chain; does NOT block off-chain evidence-root vectors.
 - P2+P4 verifier: DONE + orchestrator-verified (committed cc03032). verify_vectors.py exit 0, byte-stable. New ratified roots recorded in CONTEXT_HANDOFF read-from-disk: reward-01 a9c35cf4/02 ea943182/03 b882c899 (+ empty, dup-recipient hard error); assign-12 c7a4253f/13 35f6a7f6 (switchback)/14 e67ebfe9/15 a1116ebf (matched_cluster); evidence-01 a13e1cdc/02 e45697c8/03 1010891b (+empty, signer-not-32 hard error). Sim non-ASCII parity independently CONFIRMED → discrepancy #2 fully CLOSED. New reference modules reward.py + evidence.py; assignment.py extended.
 
+**✅ M3 ACCEPTANCE GATE MET (2026-07-24, orchestrator-verified) — verifier CLI committed a087efb.**
+crp-verify reproduces EVERY root/hash from a published bundle OFFLINE, treating roots.json as an
+untrusted claim: manifest 74e0bb82 / assignment c229b5cc / evidence-01 a13e1cdc / reward-01 a9c35cf4 on
+the real golden-happy fixture → verdict ACCEPT exit 0. Orchestrator independently ran: pip install -e .
++ crp-verify (ACCEPT), 33 tests pass, verify_vectors still exit 0 (goldens intact), soundness fix real
+(recomputed result_artifact_hash now compared vs untrusted roots.json+provenance — a cooked self-
+consistent analysis.json previously passed), no forked encoder (only json.dumps is the byte-stable --json
+report). Adversarial adv-01..06 + seam-tamper + substituted-root all rejected (exit 1). Cross-impl: 3-way
+agreement (Python/TS/on-chain) on assignment + §6.6 reward + seed/prf/merkle; Python+TS on JSON+evidence
+roots. THE M3 CRITERION ("independent reproduction of result hash + every reward leaf from a bundle, no
+network, no trust in coordinator, adversarial rejected, TS+Python agree") = SATISFIED.
+⚠ FORMAL M3 ACCEPTANCE STILL BLOCKED by the standing gating rule: M3 cannot be DECLARED accepted while
+the M2 devnet item is open. So: M3 gate technically demonstrated, M3 milestone NOT formally accepted until
+M2 devnet deploy + 18/18 closes (owner user; wallet yP8HDbBX…MVe2Q still 0 SOL).
+M3 verifier follow-ups (non-blocking, from agent): (a) manifest.example.json has no machine-readable
+assignment.design/params, so the arm-from-seed derivation leg SKIPs on the example — pin a canonical
+location in manifest.schema.json (architect) so --seed fully re-derives arms on real manifests; (b) for a
+wheel install outside the repo, vendor reference/ into the package or set CRP_REFERENCE_DIR (README notes it).
+
 **M3 GATE + SPEC ROUND IN PROGRESS (2026-07-24 pm, after 1:50pm Rome session reset).** Verifier CLI +
 architect batch each died mid-run on the session limit; BOTH partials verified coherent + committed
 (no work lost), then RE-DISPATCHED onto the committed partials (build-on, not restart):
