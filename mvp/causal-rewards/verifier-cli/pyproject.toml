@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crp-verifier"
+version = "0.1.0"
+description = "Independent, offline reproduction oracle for Causal Rewards Protocol audit bundles"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Causal Rewards Protocol" }]
+keywords = ["solana", "depin", "merkle", "reproducibility", "audit"]
+
+# The verifier recomputes JSON/SHA-256 roots with the stdlib alone; the SOLE runtime
+# dependency is pyarrow, used only to read the Parquet transport. It is pinned to the
+# same version the reference bundle assembler ships in its pinned container so that a
+# clean-machine reproduction reads the exact bytes the producer wrote.
+dependencies = [
+  "pyarrow==18.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.4",
+]
+
+[project.scripts]
+crp-verify = "crp_verifier.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

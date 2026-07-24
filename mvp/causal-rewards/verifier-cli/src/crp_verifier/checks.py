@@ -248,9 +248,24 @@ def _recompute_epoch_roots(b: Bundle) -> tuple[list[str], CheckResult | None]:
     """
     recomputed: list[str] = []
     epochs = _roots(b)["evidence_epochs"]
+    prev_epoch_index: int | None = None
     for e in epochs:
         rel = str(e["file"])
         declared = str(e["evidence_epoch_root_hex"])
+        # Epoch indices MUST advance strictly (append-only chain); a re-used or out-of-order
+        # epoch_index is a replay of an already-anchored epoch (adv-02, EPOCH_INDEX_NOT_MONOTONIC).
+        try:
+            ei = int(str(e["epoch_index"]))
+        except (KeyError, ValueError):
+            return recomputed, _fail(
+                "evidence_epoch_roots", "evidence epoch is missing a numeric epoch_index",
+                "epoch_index", "<integer>", str(e.get("epoch_index")))
+        if prev_epoch_index is not None and ei <= prev_epoch_index:
+            return recomputed, _fail(
+                "evidence_epoch_roots",
+                "evidence epoch_index not strictly ascending (EPOCH_INDEX_NOT_MONOTONIC)",
+                "epoch_index", "> %d" % prev_epoch_index, str(ei))
+        prev_epoch_index = ei
         t = b.parquet(rel)
         leaf_hex = t.column("leaf_hash_hex")
         prev: str | None = None
@@ -313,6 +328,21 @@ def check_result_artifact_and_seam(b: Bundle) -> CheckResult:
         return _fail(name, "analysis.json is not stored as verbatim canonical bytes",
                      "analysis.json bytes", "<CJSON(analysis)>", "<stored bytes differ>")
     result_hash = _ref.sha256_hex(recanon)
+
+    # The reproduced hash MUST equal the anchored result_artifact_hash (roots.json /
+    # provenance), else the analysis.json shipped is not the one the bundle committed to
+    # (a cooked/substituted result). roots.json is the untrusted claim being reproduced.
+    declared = _roots(b).get("result_artifact_hash")
+    if declared is None:
+        declared = b.roots["roots"].get("result_hash")  # tolerated legacy key
+    if declared is not None and str(declared) != result_hash:
+        return _fail(name, "recomputed result artifact hash != roots.json",
+                     "result_artifact_hash", str(declared), result_hash)
+    if b.has("provenance.json"):
+        prov_rah = b.json("provenance.json").get("result_artifact_hash")
+        if prov_rah is not None and str(prov_rah) != result_hash:
+            return _fail(name, "provenance.json result_artifact_hash != recomputed",
+                         "provenance.result_artifact_hash", result_hash, str(prov_rah))
 
     # seam: analysis-declared epoch roots vs recomputed-from-evidence
     recomputed, failure = _recompute_epoch_roots(b)
