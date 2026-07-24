@@ -403,8 +403,11 @@ def assemble_bundle(
 def _reward_root_from_table(table: Table) -> str:
     """Recompute the §6.6 reward root from ``rewards.parquet`` rows via the reference impl."""
     leaves = []
-    for leaf_index, recipient_b58, amount, leaf_hash_hex in table.rows:
-        recipient = roots_mod.signer_pubkey_be32(recipient_b58)
+    for leaf_index, recipient_hex, amount, leaf_hash_hex in table.rows:
+        # recipient_hex is 64 lowercase hex (validate_rewards_table enforces this) and
+        # hex-decodes to exactly 32 raw bytes — the SAME bytes a base58 form would decode to,
+        # so the §6.6 preimage and every leaf hash / the reward root are byte-identical.
+        recipient = bytes.fromhex(recipient_hex)
         expected = _ref.reward.reward_leaf_hash(recipient, int(amount), int(leaf_index)).hex()
         if expected != leaf_hash_hex:
             raise EvidenceRejected(

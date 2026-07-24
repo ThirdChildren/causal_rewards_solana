@@ -165,7 +165,7 @@ def _rewards_table(recipients: list[bytes], amounts: list[int]) -> Table:
     records = [
         {
             "leaf_index": str(lf.leaf_index),
-            "recipient_pubkey": _ref.evidence.b58encode(lf.recipient),
+            "recipient_hex": lf.recipient.hex(),
             "amount_base_units": str(lf.amount_base_units),
             "leaf_hash_hex": _ref.reward.reward_leaf_hash(
                 lf.recipient, lf.amount_base_units, lf.leaf_index
@@ -177,26 +177,36 @@ def _rewards_table(recipients: list[bytes], amounts: list[int]) -> Table:
 
 
 def _analysis(epoch_roots: list[str]) -> dict:
+    """The engine's richer top-level schema (crp_engine.artifacts.build_analysis) plus the
+    seam field ``evidence_epoch_roots`` the assembler binds against."""
     return {
+        "schema": "crp.analysis/v1",
         "spec_version": "1.1.0",
         "experiment_id": fx.EXPERIMENT_ID,
-        "analysis_container_digest": fx.small_manifest()["analysis_plan"][
-            "analysis_container_digest"
-        ],
-        "evidence_epoch_roots": epoch_roots,
-        "estimates": [],
-        "result": {
-            "effect_micro": "125000",
-            "standard_error_micro": "40000",
-            "conservative_effect_micro": "46800",
-            "critical_value_micro": "1960000",
-            "confidence_level_micro": "950000",
-            "degrees_of_freedom": "12",
-            "eligible_cohort_count": "2",
-            "null_result": "false",
+        "manifest_hash": "00" * 32,
+        "engine": {
+            "name": "crp-causal-engine",
+            "version": "0.0.0-test",
+            "analysis_container_digest": fx.small_manifest()["analysis_plan"][
+                "analysis_container_digest"
+            ],
+            "reference_source_digest": "sha256:test",
         },
-        "sensitivity": {},
-        "missingness_handling": {"policy": "listwise-drop-of-missing-cells"},
+        "evidence_epoch_roots": epoch_roots,
+        "primary_estimate": {
+            "term": "treated",
+            "effect_s": "125000",
+            "standard_error_s": "40000",
+            "conservative_improvement_s": "46800",
+        },
+        "reward_summary": {
+            "budget_base_units": "1000000",
+            "leaf_count": "2",
+            "reward_root_hex": "00" * 32,
+            "null_distribution": "false",
+        },
+        "cohorts": [],
+        "sensitivity": [],
     }
 
 

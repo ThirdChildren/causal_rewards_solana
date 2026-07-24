@@ -15,30 +15,27 @@ emits a different shape, the contract is renegotiated in the spec, not patched i
 --------------------------------------------------------------------------------
 Canonical-JSON bytes (serialization.md §3/§4) written with the SAME encoder
 (``verifier-cli/reference/canonical.py``). Therefore: **no JSON number tokens** — every
-numeric value is a canonical integer-scaled decimal STRING (§2). Required top-level keys:
+numeric value is a canonical integer-scaled decimal STRING (§2).
+
+The engine's richer schema (``crp_engine.artifacts.build_analysis``) is normative for the
+file's content. The assembler validates only the seam it depends on — it does not force the
+engine into a second, redundant ``result{…_micro}`` block. Required top-level keys the
+assembler enforces:
 
     spec_version                 "1.1.0"
     experiment_id                must equal manifest.experiment_id
-    analysis_container_digest    must equal manifest.analysis_plan.analysis_container_digest
     evidence_epoch_roots         [ "<64-hex>", ... ] in ASCENDING epoch order — the exact
                                  roots this analysis consumed; the assembler cross-checks
                                  them against the roots it built (mismatch = hard error,
                                  this is the freeze-before-reveal link between evidence and
                                  result)
-    estimates                    [ per-cohort estimate objects, see below ]
-    result                       { effect_micro, standard_error_micro,
-                                   conservative_effect_micro, critical_value_micro,
-                                   confidence_level_micro, degrees_of_freedom,
-                                   eligible_cohort_count, null_result ("true"|"false") }
-    sensitivity                  { <named analysis> : { ... } }  (may be empty object)
-    missingness_handling         free-form object describing how missing cells (see
-                                 missingness findings in this bundle) entered the estimate
+    primary_estimate             the top-level primary result object (effect / SE / margin /
+                                 conservative improvement, all scaled integer strings)
+    reward_summary               budget / allocation / reward_root_hex summary
+    cohorts                      [ per-cohort estimate objects ]
 
-Per-cohort estimate object keys:
-
-    cohort_id, arm, n_observations, n_time_blocks,
-    effect_micro, standard_error_micro, conservative_effect_micro,
-    eligible ("true"|"false"), ineligibility_reason (""|"<code>")
+If the object carries ``engine.analysis_container_digest`` and the frozen manifest declares
+one, the assembler additionally requires they agree (freeze binding).
 
 ``result_artifact_hash`` (what ``submit_evaluation`` anchors) = SHA-256 of the CJSON bytes of
 this object = the ``sha256`` the assembler records for ``analysis.json``. The causal engine
@@ -51,13 +48,17 @@ Written by ``parquet_writer.write_table`` with the pinned settings (import it; d
 Parquet by hand — byte-stability is the whole point). All columns are UTF-8 strings.
 
 Row order MUST be the §6.6 reward-tree leaf order: ascending ``recipient`` (32-byte
-big-endian compare of the base58-decoded pubkey), i.e. ``leaf_index`` ascending, contiguous
+big-endian compare of the hex-decoded pubkey), i.e. ``leaf_index`` ascending, contiguous
 from 0. ``sort_order`` = ``"reward_leaf_index_asc"``.
 
 Columns (exact names, exact order):
 
     leaf_index               canonical uint string, 0..N-1, contiguous
-    recipient_pubkey         base58, MUST decode to exactly 32 bytes
+    recipient_hex            64 lowercase hex, MUST hex-decode to exactly 32 bytes (else hard
+                             error). This matches the ratified reward-0x test vectors and the
+                             engine's leaf-set output; hex vs base58 is presentation only — the
+                             §6.6 preimage consumes 32 raw bytes, so the encoding does not move
+                             any leaf hash or the reward root.
     amount_base_units        canonical uint string, mint-native base units
     leaf_hash_hex            64 lowercase hex, SHA-256(0x00||"CRP:reward:v1"||leaf_content)
 
@@ -101,30 +102,27 @@ __all__ = [
 
 ANALYSIS_FILENAME = "analysis.json"
 REWARDS_FILENAME = "rewards.parquet"
-REWARDS_COLUMNS = ("leaf_index", "recipient_pubkey", "amount_base_units", "leaf_hash_hex")
+REWARDS_COLUMNS = ("leaf_index", "recipient_hex", "amount_base_units", "leaf_hash_hex")
 REWARDS_SORT_ORDER = "reward_leaf_index_asc"
 
 ANALYSIS_REQUIRED_KEYS = (
     "spec_version",
     "experiment_id",
-    "analysis_container_digest",
     "evidence_epoch_roots",
-    "estimates",
-    "result",
-    "sensitivity",
-    "missingness_handling",
+    "primary_estimate",
+    "reward_summary",
+    "cohorts",
 )
 
-_RESULT_REQUIRED_KEYS = (
-    "effect_micro",
-    "standard_error_micro",
-    "conservative_effect_micro",
-    "critical_value_micro",
-    "confidence_level_micro",
-    "degrees_of_freedom",
-    "eligible_cohort_count",
-    "null_result",
-)
+
+def _nested_container_digest(analysis: Mapping[str, Any]) -> str | None:
+    """The engine nests the digest under ``engine.analysis_container_digest``."""
+    engine = analysis.get("engine")
+    if isinstance(engine, Mapping):
+        d = engine.get("analysis_container_digest")
+        if d is not None:
+            return str(d)
+    return None
 
 
 def validate_analysis_object(
@@ -134,7 +132,11 @@ def validate_analysis_object(
     evidence_epoch_roots: Sequence[str],
     analysis_container_digest: str | None = None,
 ) -> None:
-    """Enforce the ``analysis.json`` contract. Raises ``EvidenceRejected`` on violation."""
+    """Enforce the ``analysis.json`` seam contract. Raises ``EvidenceRejected`` on violation.
+
+    The engine's richer schema is normative for content; the assembler validates only the
+    keys it depends on plus the freeze-before-reveal ``evidence_epoch_roots`` link.
+    """
     missing = [k for k in ANALYSIS_REQUIRED_KEYS if k not in analysis]
     if missing:
         raise EvidenceRejected(
@@ -148,15 +150,14 @@ def validate_analysis_object(
             "analysis.json experiment_id %r != bundle %r"
             % (analysis["experiment_id"], experiment_id),
         )
-    if (
-        analysis_container_digest is not None
-        and analysis["analysis_container_digest"] != analysis_container_digest
-    ):
-        raise EvidenceRejected(
-            RejectionCode.BUNDLE_INCOMPLETE,
-            "analysis.json analysis_container_digest %r != frozen manifest %r"
-            % (analysis["analysis_container_digest"], analysis_container_digest),
-        )
+    if analysis_container_digest is not None:
+        declared_digest = _nested_container_digest(analysis)
+        if declared_digest is not None and declared_digest != analysis_container_digest:
+            raise EvidenceRejected(
+                RejectionCode.BUNDLE_INCOMPLETE,
+                "analysis.json engine.analysis_container_digest %r != frozen manifest %r"
+                % (declared_digest, analysis_container_digest),
+            )
     declared = list(analysis["evidence_epoch_roots"])
     if declared != list(evidence_epoch_roots):
         raise EvidenceRejected(
@@ -166,15 +167,6 @@ def validate_analysis_object(
             % (declared, list(evidence_epoch_roots)),
             analysis_roots=declared,
             bundle_roots=list(evidence_epoch_roots),
-        )
-    result = analysis["result"]
-    if not isinstance(result, dict):
-        raise EvidenceRejected(RejectionCode.BUNDLE_INCOMPLETE, "analysis.json result must be an object")
-    missing = [k for k in _RESULT_REQUIRED_KEYS if k not in result]
-    if missing:
-        raise EvidenceRejected(
-            RejectionCode.BUNDLE_INCOMPLETE,
-            "analysis.json result missing keys: %s" % ", ".join(missing),
         )
 
 
@@ -210,7 +202,9 @@ def validate_rewards_table(table: Table) -> None:
                 RejectionCode.BUNDLE_INCOMPLETE,
                 "rewards.parquet leaf_hash_hex is not 64 lowercase hex: %r" % (leaf_hash,),
             )
-        if not recipient:
+        if not RE_HEX64.match(recipient):
             raise EvidenceRejected(
-                RejectionCode.BUNDLE_INCOMPLETE, "rewards.parquet recipient_pubkey is empty"
+                RejectionCode.BUNDLE_INCOMPLETE,
+                "rewards.parquet recipient_hex must be 64 lowercase hex (hex-decode to "
+                "exactly 32 bytes): %r" % (recipient,),
             )

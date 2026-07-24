@@ -226,7 +226,8 @@ contract (filenames, location, required keys, column names, ordering, validation
   assembler cross-checks them against the roots it built and rejects a mismatch. Its
   `sha256` **is** the `result_artifact_hash` that `submit_evaluation` anchors.
 * `rewards.parquet` — written with `parquet_writer.write_table`; columns
-  `(leaf_index, recipient_pubkey, amount_base_units, leaf_hash_hex)`, all strings, rows in
+  `(leaf_index, recipient_hex, amount_base_units, leaf_hash_hex)`, all strings (`recipient_hex`
+  is 64 lowercase hex, hex-decoding to exactly 32 bytes), rows in
   §6.6 leaf order (`leaf_index` ascending, contiguous from 0), one leaf per **recipient**
   (aggregated over cohorts, zero-sum recipients omitted). The assembler recomputes the reward
   root with `verifier-cli/reference/reward.py` and rejects a mismatch.
