@@ -18,6 +18,30 @@ metadata:
 - FOLLOW-UPS from architect: (B-notes) switchback schedule policy + matching-quality → causal-eng CONFIRMATION, non-blocking (bytes pinned), fold into causal-eng M3 task. (C-adjacent) multi-batch epoch sub-roots → singular on-chain EvidenceEpoch.{signer_set_root,observations_root} mapping — resolve (architect + solana-program-engineer) before evidence roots post on-chain; does NOT block off-chain evidence-root vectors.
 - P2+P4 verifier: DONE + orchestrator-verified (committed cc03032). verify_vectors.py exit 0, byte-stable. New ratified roots recorded in CONTEXT_HANDOFF read-from-disk: reward-01 a9c35cf4/02 ea943182/03 b882c899 (+ empty, dup-recipient hard error); assign-12 c7a4253f/13 35f6a7f6 (switchback)/14 e67ebfe9/15 a1116ebf (matched_cluster); evidence-01 a13e1cdc/02 e45697c8/03 1010891b (+empty, signer-not-32 hard error). Sim non-ASCII parity independently CONFIRMED → discrepancy #2 fully CLOSED. New reference modules reward.py + evidence.py; assignment.py extended.
 
+**M3 GATE + SPEC ROUND IN PROGRESS (2026-07-24 pm, after 1:50pm Rome session reset).** Verifier CLI +
+architect batch each died mid-run on the session limit; BOTH partials verified coherent + committed
+(no work lost), then RE-DISPATCHED onto the committed partials (build-on, not restart):
+- Verifier CLI partial committed da30ee5 (WIP): core checks landed (checks.py run_all: manifest/
+  assignment/evidence-epoch/result-seam/reward/onchain + bundle loader + _ref). MISSING: CLI entry,
+  tests, end-to-end fixture bundle, adversarial+seam-tamper rejection, cross-impl matrix. Re-dispatched
+  a4f6606925ea159e2. INERT until imported, safe. Also committed the SAFE additive merkle.py refactor the
+  verifier made: extract merkle_root_from_hashes (combine ordered 32-byte leaf hashes via §6.1 node +
+  §6.3 promotion; merkle_root delegates, byte-identical) — goldens verified unchanged; it IS the §6.5.2
+  combine() primitive (nice cross-agent consistency).
+- Architect spec round Part A partial committed 06a2df7 (NON-hash, goldens intact): reward-policy.md
+  items 8 (strong-causal eligibility gate: eligible_for_strong_causal_claim=false ⇒ no positive reward,
+  empty tree, discovery-only analysis.json) + 9 ("cohort c" = geo-cohort valuation unit aggregating over
+  its blocks; estimand unit unchanged); serialization.md §6.5.1 rejection-code table (item 4, incl
+  TIME_RANGE_INVALID + AGGREGATE_SUMMARY_INCONSISTENT) + §6.5.2 epoch sub-root→singular combine() mapping
+  (item 5, identity for single-batch, off-chain enforced via reproduction+challenge, solana-program-eng
+  confirmation requested). STILL OWED → re-dispatched ab763a30f78faec6d: §9 revision-history note, item 2
+  bundle-hash-normativity ruling (logical vs content), item 7 HAC, Part B v1.2-migration-proposal.md
+  (participant §6.2 + evidence_schedule/missingness, WITH computed new golden — DRAFT ONLY, user sign-off),
+  Part C multiplicity-recommendation.md against docs/multiplicity-study.md.
+LESSON REINFORCED: long specialist runs die on session limits; ALWAYS verify partials on disk + commit
+coherent slices + re-dispatch build-on, rather than assume completion. Manifest 74e0bb82 + evidence
+901b08d5 reproduce intact after all committed edits; verify_vectors.py exit 0.
+
 **BUNDLE SEAM CLOSED + ROUND-TRIP VERIFIED 2026-07-24 (session 2, continued).** Both sides landed +
 orchestrator-verified + committed: backend assembler tweak e16a9a2 (recipient_hex decode, relaxed
 analysis.json validator keeping evidence_epoch_roots binding; 78 tests; evidence roots a13e1cdc/e45697c8/
