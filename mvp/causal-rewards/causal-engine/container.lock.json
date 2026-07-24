@@ -1,0 +1,9 @@
+{
+  "base_image": "python@sha256:081075da77b2b55c23c088251026fb69a7b2bf92471e491ff5fd75c192fd38e5",
+  "image_digest": null,
+  "image_name": null,
+  "note": "image_digest is what a frozen manifest's analysis_plan.analysis_container_digest must carry. recipe_digest is a docker-free binding of the build inputs and is NOT a substitute for it.",
+  "recipe_digest": "sha256:5f1ac6fbfdef0eb66962d42d65e6b9c51c70bdb50fe78e2eac0972754864cf60",
+  "reference_source_digest": "sha256:692540806b4b7c03cc4f3f43f9d7b7a97fa94cb47aedd9e690bc961de12133da",
+  "schema": "crp.container_lock/v1"
+}
