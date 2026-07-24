@@ -82,9 +82,63 @@ M2 — Programs & SDK (wk 5-9) ......... ACCEPTED-PENDING-DEPLOY (NOT done; devn
     - state-machine v1.1 (H1/H2/M1 fixes) — protocol-behavior version 1.1.0, wire/hash contract
       1.0.0 UNCHANGED, manifest golden 74e0bb82... byte-identical.
 
-M3 — Evidence & causal engine (wk 10-14) ................... NOT STARTED
+M3 — Evidence & causal engine (wk 10-14) ................... CORE LANDED, INTEGRATION OPEN
   Acceptance test: independent reproduction of result-artifact hash + reward roots
   from an audit bundle, with zero network access, no trust in coordinator/evaluator.
+  Two core components delivered + orchestrator-verified (2026-07-24):
+    - evidence-service/ (commit b15d4ef): signed-batch ingestion (recompute+verify
+      header_hash_hex + batch_signature, never trust producer), content-addressed
+      storage, §6.5 evidence roots, audit-bundle assembler. Reproduces evidence-01
+      a13e1cdc / -02 e45697c8 / -03 1010891b + empty 32-zero + SIGNER_PUBKEY_NOT_32
+      + adv-03 DUPLICATE_EVIDENCE_LEAF. 78 tests, determinism across interpreters.
+      Replay/dedup identity = SHA-256(CJSON(full signed batch)), NOT header_hash_hex
+      (header hash excludes the signature → two honest producers of the same cell
+      would collide). Two-level determinism: canonical_content_hash + bundle_logical_hash
+      (portable) vs bundle_content_hash (pyarrow-version-scoped).
+    - causal-engine/ (commit 11de232): cohort estimators (CR1 cluster-robust SE,
+      absorbed FE), balance/sensitivity, two-stage reward compiler (Stage-1 conservative
+      LCB max(0,improvement-margin) with min-sample+identification gates forcing 0;
+      Stage-2 CRP-WS1 split → ratified aggregate leaf set). Reproduces reward-01
+      a9c35cf4 / -02 ea943182 / -03 b882c899 + empty + dup-recipient hard error.
+      143 tests, determinism across interpreters, pinned container. Invariant-3 formula
+      exact. DISCLOSED: no cross-cohort multiplicity control → true-null network pays
+      ~5% of cohorts (s2_null_effect: 29.6% of budget to 2/60 under TRUE zero effect).
+    Both: one encoder only (import verifier-cli/reference by path), specs/+test-vectors/
+    UNMODIFIED, no golden bent to code. Each agent's async task died with its session;
+    output verified ON DISK before acceptance (lesson: async agents don't survive session end).
+  OPEN — BUNDLE SEAM (blocks the M3 acceptance gate): the two components' analysis.json
+  + rewards.parquet contracts were designed independently and don't interoperate.
+    RATIFIED reconciliation (no hash move; see docs/m3-integration-and-spec-round.md §1):
+    bundle rewards.parquet = the leaf set (col recipient_hex, matching the reward-0x
+    vectors); engine's per-cohort table → rewards_detail.parquet; analysis.json = engine's
+    richer schema + top-level evidence_epoch_roots; assembler takes the one-line decode/
+    validator tweak. PREIMAGE-INVARIANCE CONFIRMED: recipient_hex↔recipient_pubkey(base58)
+    both decode to the same 32 raw bytes; §6.6 preimage consumes bytes, so reward roots are
+    byte-identical — presentation only, NOT a v1.2 migration. Adapter = causal-eng next turn;
+    assembler tweak = backend. VERIFIER CLI (M3 oracle) stays HELD until a bundle round-trips.
+  OPEN — batched spec round (protocol-architect), DEFERRED to ~3am Rome session reset:
+    9 items in docs/m3-integration-and-spec-round.md §3 (participant leaf §6.2 [hash-moving],
+    evidence_schedule+missingness [hash-moving v1.2], bundle-hash normativity ruling,
+    2 rejection codes, multi-batch→singular epoch mapping, engine's HAC/discovery-settlement/
+    Stage-1-wording proposals). Non-hash items (4,5,8,9 + item-2 ruling) can land in one commit;
+    hash-moving items (1, 3+6 as one missingness decision) are a deliberate v1.2 manifest migration.
+    HELD NOT because of throughput but because the seam adapter (causal-eng) is also dead until
+    the same reset, so dispatching now buys nothing on the critical path while risking a
+    half-migrated specs/ — the worst place to crash.
+  OPEN — multiplicity study (causal-eng + architect), data-gated (docs §2): DO NOT frame as
+    {none vs Bonferroni}. Bonferroni over ~60 cohorts → α≈0.0008, crushes power (makes our #1
+    risk item the default). Leading candidate = FDR / Benjamini-Hochberg (controls the proportion
+    of WASTED SPEND, which is what a budget-allocation cares about; deterministic → frozen-manifest
+    compatible). Architect must also address the STRUCTURAL point: under a true null the fixed
+    budget concentrates (does not shrink), so a few false positives absorb disproportionate spend;
+    rule whether the reward CURVE / value_scale carries part of the fix, not only the threshold.
+    Causal-eng runs 6 scenarios × 4 regimes (none/Bonferroni/Šidák/BH), reporting per regime:
+    share of budget to true-null cohorts, share of true-positive cohorts correctly paid, total
+    deployed vs recovered. Benchmark-report material regardless of the choice.
+  AT 3AM RESET, execute the decided plan (fast, not open-ended): (1) dispatch causal-eng for the
+    seam adapter §1.2 + the §2.1 simulator study; (2) dispatch architect for the §3 batch against
+    the already-written proposal doc + the §2.2 recommendation once §2.1 data exists;
+    (3) backend one-line assembler tweak §1.3; (4) then un-HOLD + build the verifier CLI (M3 oracle).
 
 M4 — Pilot, hardening, release (wk 15-20) .................. NOT STARTED
   Acceptance test: tagged OSS release + public dashboard + benchmark report +
@@ -245,16 +299,22 @@ INTERFACE / SERIALIZATION DECISIONS OTHER COMPONENTS DEPEND ON
 ================================================================================
 EXPLICITLY NOT DONE YET
 ================================================================================
-- No Solana program code (programs/ are README stubs). M2.
-- No SDK code (sdk/ stubs). M2.
-- No causal engine estimators / reward compiler (causal-engine/ stub). M3.
-- No full verifier CLI (only reference impl + vectors exist). M3.
-- No backend evidence pipeline / audit bundle / roots.json. M3.
+- Solana programs (M2) + TS SDK (M2): CODE-COMPLETE, security GO. Only open M2 item = devnet
+  deploy + 18/18 integration re-run (needs funded devnet wallet; see MILESTONE LEDGER + below).
+- causal-engine estimators + reward compiler: DONE (commit 11de232). See M3 ledger.
+- backend evidence pipeline + audit bundle assembler: DONE (commit b15d4ef). See M3 ledger.
+- No full verifier CLI yet — HELD until the bundle seam round-trips (docs/m3-integration-and-
+  spec-round.md §1.2/§1.3). This is the M3 acceptance oracle; last M3 build item.
+- roots.json IS now produced by the assembler; bundle rewards.parquet + analysis.json seam
+  reconciliation ratified but not yet WIRED (adapter + assembler tweak pending 3am reset).
 - No dashboard. M4.
-- Reward-tree + participant-tree Merkle leaf sort keys still deferred (serialization.md
-  §6.2): reward-leaf identity depends on M3 reward-compiler output; participant tree pending M2.
+- Participant-tree Merkle leaf sort key still UNPINNED (serialization.md §6.2). Backend implements
+  the recommendation of record + stamps PROVISIONAL-UNPINNED-6.2; architect batch item 1 (hash-moving).
+  Reward-tree leaf order IS ratified (§6.6 aggregate-one-leaf-per-recipient; reward-0x goldens green).
 - No devnet deployment. No mainnet/token/fee (never, by invariant 7).
-  (evidence.schema.json IS now serializer-conformant; evidence leaf sort key IS pinned §6.5.)
+  (evidence.schema.json IS serializer-conformant; evidence leaf sort key IS pinned §6.5.)
+- Devnet wallet yP8HDbBX5f1CP2YzbhHhQ6GT31zggaDiRmt5dDMVe2Q has 0 SOL; CLI airdrop rate-limited;
+  4 programs need ~9-17 SOL. User funds it, then scripts/deploy-devnet.sh (devnet-guarded) + 18/18.
 
 ================================================================================
 HOW TO RESUME
