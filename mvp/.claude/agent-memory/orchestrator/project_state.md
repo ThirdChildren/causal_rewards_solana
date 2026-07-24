@@ -18,6 +18,23 @@ metadata:
 - FOLLOW-UPS from architect: (B-notes) switchback schedule policy + matching-quality → causal-eng CONFIRMATION, non-blocking (bytes pinned), fold into causal-eng M3 task. (C-adjacent) multi-batch epoch sub-roots → singular on-chain EvidenceEpoch.{signer_set_root,observations_root} mapping — resolve (architect + solana-program-engineer) before evidence roots post on-chain; does NOT block off-chain evidence-root vectors.
 - P2+P4 verifier: DONE + orchestrator-verified (committed cc03032). verify_vectors.py exit 0, byte-stable. New ratified roots recorded in CONTEXT_HANDOFF read-from-disk: reward-01 a9c35cf4/02 ea943182/03 b882c899 (+ empty, dup-recipient hard error); assign-12 c7a4253f/13 35f6a7f6 (switchback)/14 e67ebfe9/15 a1116ebf (matched_cluster); evidence-01 a13e1cdc/02 e45697c8/03 1010891b (+empty, signer-not-32 hard error). Sim non-ASCII parity independently CONFIRMED → discrepancy #2 fully CLOSED. New reference modules reward.py + evidence.py; assignment.py extended.
 
+**BUNDLE SEAM CLOSED + ROUND-TRIP VERIFIED 2026-07-24 (session 2, continued).** Both sides landed +
+orchestrator-verified + committed: backend assembler tweak e16a9a2 (recipient_hex decode, relaxed
+analysis.json validator keeping evidence_epoch_roots binding; 78 tests; evidence roots a13e1cdc/e45697c8/
+1010891b UNCHANGED; no frozen bundle golden moved — pinned fixture is evidence-only); causal-eng adapter +
+multiplicity study 2964128 (rewards.parquet = leaf set [leaf_index,recipient_hex,amount_base_units,
+leaf_hash_hex], per-cohort → rewards_detail.parquet, analysis.json + top-level evidence_epoch_roots; 158
+tests; reward roots a9c35cf4/ea943182/b882c899 unchanged; determinism holds).
+END-TO-END ROUND-TRIP (orchestrator ran, both pkgs one interpreter): engine writes real rewards.parquet
+bytes → crp_evidence assembler reads+validates+recomputes → reward-01 a9c35cf4 = golden. Seam proven
+through real code both sides, not just shape-compatible. ⇒ VERIFIER CLI (M3 oracle) UNBLOCKED; dispatched.
+MULTIPLICITY STUDY LANDED (docs/multiplicity-study.md, deterministic): 6 scenarios × 4 regimes. KEY
+FINDING for architect: every correction cuts s2_null_effect false positives 2→1, yet the lone survivor
+still absorbs ~26% of budget — a p-value threshold bounds the fraction of PAID cohorts that are null, NOT
+the fraction of BUDGET (fixed budget concentrates under a true null). Fully closing needs a reward-curve/
+value_scale floor (flagged, not decided). Default stays `none`; BH = leading threshold candidate. Data now
+exists for the architect recommendation (docs §2.2).
+
 **M3 CORE RE-DISPATCHED 2026-07-23 (session 2).** First dispatch (a71719f6/a330baac) died with the
 session — NO output landed on disk (causal-engine/ was still README-only, no evidence-pipeline dir).
 Baseline re-verified green at session start: manifest 74e0bb82…, verify_vectors.py exit 0 (serialization
