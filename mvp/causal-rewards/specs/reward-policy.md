@@ -13,9 +13,10 @@ analyzed (Invariant 1). All arithmetic is integer arithmetic over integer-scaled
 floats enter any hashed artifact (Invariant 2, `serialization.md`). The total payout can never
 exceed the fixed `budget_base_units` (Invariant 3).
 
-- **Stage 1 — cohort valuation.** Each geo-cohort × time-block unit is valued from its
+- **Stage 1 — cohort valuation.** Each **geo-cohort** (aggregating over its time blocks; the
+  estimand unit stays geo-cohort × time-block, see "Stage-1 unit" below) is valued from its
   *conservative* causal effect via the frozen reward curve. This is the only place additionality
-  enters payment.
+  enters payment, and only for designs eligible for the strong causal claim.
 - **Stage 2 — intra-cohort split.** A cohort's allocation is divided among its participants by a
   *frozen* quality-weighted rule. This never claims an individual-device counterfactual
   (Invariant 4); it only distributes a cohort-level amount.
@@ -26,7 +27,31 @@ Notation: values suffixed `_s` are integers at `positive_improvement_transform.e
 
 ## Stage 1 — cohort valuation
 
-For each cohort `c` (a geo-cohort × time-block unit; Invariant 4):
+**Stage-1 unit of valuation vs. the estimand unit (normative; resolves the "cohort `c`"
+ambiguity).** The frozen *estimand* unit is, and remains, the **geo-cohort × time-block**
+(Invariant 4; `manifest.schema.json` `estimand.unit_type = geo_cohort_time_block`). The
+Stage-1 *valued* entity `c` is the **geo-cohort**, i.e. one geo-cohort **aggregating over all of
+its time blocks** in the analysis set. This is the only reading under which the per-cohort
+`analysis_plan.minimum_sample` thresholds are well-defined: `min_time_blocks` counts the geo-cohort's
+own time blocks, `min_units_per_cohort` / `min_observations_per_cohort` count over the geo-cohort's
+blocks. A single time block is never valued or paid on its own. Equivalently: the estimator
+identifies an effect at the geo-cohort × time-block level; Stage 1 then reduces each geo-cohort to
+one `(effect_c_s, se_c_s)` pair over its blocks (per the frozen estimator + SE method) and values
+that geo-cohort. Throughout this document, "cohort `c`" means this geo-cohort valuation unit.
+
+**Strong-causal-claim eligibility gate (normative; Invariant 3, 6).** A design whose frozen
+`design.eligible_for_strong_causal_claim` is `false` (e.g. `observational_replay`) **MUST NOT settle
+any positive reward.** For such a design the compiler forces every `conservative_c_s = 0`, hence
+every `alloc_c = 0`, produces the empty reward tree (`serialization.md` §6.6, root = 32 zero bytes),
+and the entire budget is recoverable — regardless of the point estimates. The analysis container
+still runs and emits a **discovery-only** `analysis.json` (effects, SEs, sensitivity, diagnostics for
+audit and hypothesis generation), but that artifact carries no settleable allocation. This is
+deliberate: paying on a design that cannot support the additionality claim would let the chain
+appear to endorse a causal conclusion it cannot ("chain verifies process, not truth", Invariant 6).
+Whether a *non-strong-but-not-replay* design may pay is not widened here: only `eligible_for_strong_causal_claim
+== true` designs settle positive rewards in v1.1.
+
+For each cohort `c` (the geo-cohort valuation unit defined above; Invariant 4):
 
 **1. Estimate.** The pinned analysis container (`analysis_container_digest`) produces, from the
 frozen estimator and SE method, the primary-outcome effect `effect_c_s` and standard error

@@ -324,11 +324,116 @@ are a hard error), and (d) the shared §6.1 node formulas + §6.3 promotion + §
 sentinel. Nothing in leaf construction, ordering, or root computation is left to producer choice, so
 `verifier-reproducibility-engineer` can build byte-identical golden evidence roots (epoch, signer,
 observation) for any batch set. No change to §6.5 bytes was needed in v1.1; this note only records
-the confirmation. *(Adjacent, OUT OF SCOPE of §6.5's leaf sort key and NOT changed here: how a
-multi-batch epoch's per-batch sub-roots map onto the singular `EvidenceEpoch.signer_set_root` /
-`observations_root` account fields — that on-chain account-field question is owned by the
-evidence-registry / state-machine surface, not by the Merkle leaf-ordering rule, which is fully
-pinned above.)*
+the confirmation. *(The adjacent question — how a multi-batch epoch's per-batch sub-roots map onto
+the singular `EvidenceEpoch.signer_set_root` / `observations_root` account fields — was previously
+flagged OUT OF SCOPE here; it is now RESOLVED in §6.5.2 below, additively and without changing any
+§6.5 leaf byte.)*
+
+#### 6.5.1 Evidence ingestion rejection codes (wire contract)
+
+Evidence ingestion and bundle assembly raise **stable, machine-readable rejection codes**. These
+codes ARE part of the wire contract: golden vectors name them, the SDKs surface them, and the
+dashboard renders them. A code's string value is frozen; **adding** a code is an additive change,
+**renaming** one is a breaking change. A *rejection* (this table) means the input is unusable and the
+batch/tree/bundle is refused — distinct from a *finding* (admissible-but-suspicious, recorded in the
+audit bundle, never a silent drop). Every code below rejects anything that would make two honest
+verifiers disagree (Invariant 2) or that admits provably duplicated / inconsistent evidence.
+
+| Code | Raised when |
+| --- | --- |
+| `SCHEMA_INVALID` | The batch/table fails `evidence.schema.json` (unknown field, wrong type, closed-schema violation) or a hex/commitment field is malformed. |
+| `UNSUPPORTED_SPEC_VERSION` | The batch declares a `spec_version` this ingester does not implement. |
+| `NON_CANONICAL_INTEGER_STRING` | A numeric-string field is not in §2.1 canonical form (leading zero, sign, whitespace). |
+| `TIME_RANGE_INVALID` | A batch `time_range` is not a well-formed non-empty range: it violates `start ≤ end` (both are §2.2 second-scale unsigned integer strings), or otherwise fails the range constraints `evidence.schema.json` documents. Rejected because a malformed or inverted range corrupts the batch header that is hashed into the epoch leaf (§6.5 tree-1) and the on-chain `EvidenceEpoch.time_range`. |
+| `AGGREGATE_SUMMARY_INCONSISTENT` | A batch's `aggregate_summary` integer counts do not agree with the committed member sets / declared sub-commitments — e.g. `distinct_signers` exceeds `signer_set_commitment.signer_count`, `accepted_count` + `rejected_count` is inconsistent with the observation set, or `quality_score_micro_sum` is not the declared sum. Rejected because these integers are anchored on-chain and consumed by the Stage-2 split (`reward-policy.md`); an internally inconsistent summary would let two verifiers derive different weights. |
+| `SIGNER_PUBKEY_NOT_32_BYTES` | A `signer_pubkey` does not base58-decode to exactly 32 bytes (§6.5 tree-3 length pin). |
+| `SIGNER_PUBKEY_INVALID_BASE58` | A `signer_pubkey` is not valid base58 in the Bitcoin/Solana alphabet. |
+| `BATCH_HEADER_HASH_MISMATCH` | The recomputed batch-header hash ≠ the declared `batch_signature.header_hash_hex`. |
+| `BATCH_SIGNATURE_INVALID` | The batch signature does not verify under the declared producer pubkey. |
+| `UNSUPPORTED_SIGNATURE_ALGO` | The batch declares a signature algorithm the ingester does not support. |
+| `REPLAYED_BATCH` | A byte-identical batch (or its content hash) was already anchored. |
+| `DUPLICATE_EVENT_NONCE` | Two observations reuse an event nonce within the dedup scope. |
+| `EXPERIMENT_ID_MISMATCH` | The batch `experiment_id` ≠ the experiment being assembled. |
+| `EPOCH_INDEX_NOT_MONOTONIC` | Epoch indices are not strictly increasing / gap-free (mirrors the on-chain no-gap rule). |
+| `EPOCH_OUT_OF_SCHEDULE` | A batch's epoch/time-range falls outside the frozen active window or schedule. |
+| `DUPLICATE_EVIDENCE_LEAF` | Two byte-identical batch leaves in one epoch tree (breaks §6.5 tree-1 strict monotonicity). |
+| `DUPLICATE_SIGNER_LEAF` | A signer pubkey appears twice in one signer sub-tree (§6.5 tree-3). |
+| `DUPLICATE_OBSERVATION_LEAF` | A content commitment appears twice in one observation sub-tree (§6.5 tree-2). |
+| `SUBTREE_ROOT_MISMATCH` | A recomputed signer/observation sub-root ≠ the declared `merkle_root_hex`. |
+| `LEAF_COUNT_MISMATCH` | A declared `signer_count` / `leaf_count` ≠ the actual member-set size. |
+| `BUNDLE_INCOMPLETE` | The bundle is missing a required file, or `analysis.json` and `rewards.parquet` are not supplied together. |
+| `BUNDLE_CONTENT_ADDRESS_MISMATCH` | A file's recomputed content hash ≠ the hash `roots.json` names it by. |
+| `DATA_MINIMIZATION_VIOLATION` | A table/field carries content forbidden by Invariant 5 (raw telemetry, coordinates, per-reading timestamps, personal data). |
+
+`TIME_RANGE_INVALID` and `AGGREGATE_SUMMARY_INCONSISTENT` are documented here as first-class codes
+in this round; both were already enforced at ingestion. `evidence.schema.json` expresses the
+structural side of each constraint (types, patterns) but does not carry the codes — the codes are
+this table's contract.
+
+#### 6.5.2 Epoch sub-root → singular on-chain field mapping (RESOLVED)
+
+The on-chain `EvidenceEpoch` account (evidence-registry) has **singular** `signer_set_root` and
+`observations_root` fields (`[u8; 32]` each), but a multi-batch epoch has **one signer sub-root and
+one observation sub-root per batch** (the `signer_set_commitment.merkle_root_hex` /
+`observations_commitment.merkle_root_hex` inside each batch header). This section pins, normatively,
+how the `n` per-batch sub-roots of an epoch combine into each singular on-chain field, such that the
+value is **recomputable from the audit bundle with no re-ingestion of member sets**.
+
+**Ordered per-batch sub-root lists.** For an epoch, order its batches by the **§6.5 tree-1 order**
+(batch-header `leaf_hash` ascending) — exactly the order in which the bundle's `roots.json`
+publishes `per_batch_signer_set_root_hex` and `per_batch_observations_root_hex`. Let the ordered raw
+32-byte sub-roots be `R = [r_0, …, r_{n-1}]` (signer) and `Q = [q_0, …, q_{n-1}]` (observation).
+
+**Combination rule (`combine`).** Each singular field is an accumulation over its ordered per-batch
+sub-root list. The per-batch sub-roots are **already** domain-separated SHA-256 roots (of the
+`signer` / `obs` sub-trees, §6.5), so they are treated as **already-hashed leaf-level nodes** and are
+combined with the §6.1 **interior** node formula only (no additional `0x00` leaf hash):
+
+```
+combine(L):                       # L = ordered list of raw 32-byte sub-roots
+  n == 0 → 32 zero bytes          # §6.4 empty-tree sentinel: "no batches anchored this epoch"
+  n == 1 → L[0]                   # identity: the epoch commitment IS the sole batch's sub-root
+  n >= 2 → treat L as one Merkle level of already-hashed nodes; pair with
+           node_hash = SHA-256(0x01 || left || right) (§6.1), promote the unpaired
+           trailing node unchanged at each level (§6.3), up to a single 32-byte root
+
+EvidenceEpoch.signer_set_root   = combine(R)
+EvidenceEpoch.observations_root = combine(Q)
+```
+
+Rationale and properties:
+
+- **Identity for the single-batch epoch (the MVP-pilot common case): `n == 1 ⇒ field == the sole
+  batch's sub-root`.** A coordinator posting a one-batch epoch anchors that batch's own
+  `signer_set`/`observations` root verbatim — no re-hashing, matching the intuitive meaning and the
+  existing single-batch posting behavior.
+- **Second-preimage separation is preserved.** A per-batch sub-root has an `0x00`-prefixed preimage
+  (`SHA-256(0x00 || "signer"|"obs" || …)`, §6.5); an accumulation node has an `0x01`-prefixed
+  preimage (§6.1). The two prefixes can never collide, so a sub-root can never be reinterpreted as an
+  accumulation node even though `combine` does not re-leaf-hash. Domain separation from other trees
+  is inherited from the sub-roots themselves.
+- **Recomputable from the bundle, no re-ingest.** `combine` consumes only the ordered per-batch
+  sub-root lists already in `roots.json`; a verifier reproduces both singular fields without touching
+  member sets. The epoch tree-1 root (`evidence_epoch_root_hex`) independently binds the same batch
+  set transitively (each batch header, which contains both sub-roots, is a tree-1 leaf), so the
+  singular fields and the epoch root are mutually consistent commitments to the same batches.
+- **The chain does not enforce the mapping.** `post_evidence_epoch` stores the posted 32-byte roots
+  verbatim (it cannot cheaply recompute `combine`, since the sub-roots live off-chain). Correctness
+  of the mapping is enforced off-chain by reproduction + the challenge process (Invariant 6), exactly
+  as for `reward_root` (§6.6). A posted singular field that does not equal `combine(...)` of the
+  bundle's ordered per-batch sub-roots is a bond-backed, upheld challenge.
+
+> **`solana-program-engineer` confirmation requested (does not block this spec ruling).** The
+> mapping is defined so the single-batch epoch stores a batch sub-root verbatim (no on-chain change
+> for the common case) and multi-batch epochs store an off-chain-computed accumulation. Confirm the
+> evidence-registry / SDK posts `combine(R)` / `combine(Q)` for `n ≥ 2` and that no on-chain
+> recomputation is expected. No program edit is implied for single-batch epochs.
+
+*Rejected alternative (recorded):* re-leaf-hashing each sub-root under a new `epoch-signer-set` /
+`epoch-obs-set` domain tag would be uniform with §6.1 but would make the single-batch field
+`SHA-256(0x00 || tag || r_0) ≠ r_0`, needlessly breaking the identity property for the dominant
+single-batch case and diverging from existing posting behavior. The `combine` rule above is chosen
+for that identity property; it is still fully domain-separated by the sub-roots' own `0x00` prefixes.
 
 ### 6.6 Reward tree (leaf form + ordering, RATIFIED)
 
