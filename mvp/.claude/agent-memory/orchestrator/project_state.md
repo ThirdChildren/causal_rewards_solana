@@ -26,6 +26,96 @@ LESSON: async specialist agents do not survive session end; re-verify their outp
 recording a dispatch as in-flight work.
 M2 devnet item: user chose "do devnet later this session" — still OPEN, still the sole M2 gate item.
 
+**backend-data-engineer M3 DELIVERED + ORCHESTRATOR-VERIFIED, committed b15d4ef (2026-07-23).**
+New `evidence-service/` (ingestion, CAS, §6.5 roots, bundle assembler). Orchestrator independently
+re-ran: `make vectors` exit 0 — evidence-01 a13e1cdc / -02 e45697c8 / -03 1010891b / empty 32-zero /
+SIGNER_PUBKEY_NOT_32_BYTES all MATCH; `make determinism` 7 passed (separate interpreters);
+full suite 78 passed; specs/ + test-vectors/ UNMODIFIED; no forked encoder (imports
+verifier-cli/reference by path, zero json.dumps in src/).
+Design decisions taken by the agent, ACCEPTED but flagged:
+- Replay/dedup identity = SHA-256(CJSON(full signed batch)), NOT header_hash_hex. Correct: header
+  hash excludes the signature, so two honest producers reporting the same cell would collide and the
+  second be wrongly rejected (violates the ratified "two distinct leaves, both admitted" rule).
+- TWO-LEVEL DETERMINISM: parquet is not byte-stable across pyarrow versions (`created_by` embeds it),
+  so each table carries canonical_content_hash = SHA256(CJSON(rows)) and the bundle carries
+  bundle_logical_hash (portable, cross-machine claim) + bundle_content_hash (exact bytes,
+  container-scoped). NEEDS ARCHITECT RATIFICATION: which hash is normative decides what the M3
+  verifier gate ("independent reproduction from the bundle") actually asserts.
+- Golden epoch vectors carry placeholder signatures, so verify_signatures=False exists for vector
+  replay and is stamped into provenance.json. Real RFC-8032 signature path tested separately.
+
+**SPEC ITEMS QUEUED FOR protocol-architect (batch into ONE round with causal-eng's items):**
+1. §6.2 participant leaf form + sort key still UNPINNED. Backend implemented the recommendation of
+   record (CJSON({"cohort_id","participant_id"}), participant_id UTF-16 asc on NFC-normalized id) and
+   stamps participant_root_status "PROVISIONAL-UNPINNED-6.2" in roots.json. Frozen participant/bundle
+   hashes WILL MOVE when ratified. No on-chain verifiability claimed until then.
+2. Ratify bundle_logical_hash vs bundle_content_hash normativity (see above).
+3. No frozen missingness policy; manifest.schema.json has no evidence_schedule. Backend derives the
+   schedule from frozen fields and states the derivation in evidence/missingness.json. Proposal: add
+   manifest.evidence_schedule {epoch_count, epoch_seconds, expected_cohort_coverage, missingness_action}.
+4. Add rejection codes AGGREGATE_SUMMARY_INCONSISTENT + TIME_RANGE_INVALID to the spec's code table
+   (schema documents the constraints but names no codes; backend enforces both).
+5. STILL OPEN (pre-existing): multi-batch epoch sub-roots → singular on-chain
+   EvidenceEpoch.{signer_set_root,observations_root}. Backend did NOT decide it; roots.json publishes
+   the full ordered per-batch lists + notes.on_chain_epoch_field_mapping, so any ratified mapping is
+   computable from the bundle without re-ingesting.
+
+**causal-inference-engineer M3 DELIVERED + ORCHESTRATOR-VERIFIED, committed 11de232 (2026-07-24).**
+Agent DIED on session limit mid-README ("resets 3am Rome"), but code+tests+docs+Dockerfile+
+container.lock all landed complete on disk; only the README was the stale stub (orchestrator finished
+it, no agent burn). New `causal-engine/` (crp_engine pkg). Orchestrator independently re-ran in a
+fresh venv: full suite 143 passed; test_reward_golden.py drives the REAL compiler (finalize_leaves)
+against ../test-vectors/reward/ and reproduces reward-01 a9c35cf4 / -02 ea943182 / -03 b882c899 /
+empty 00*32 / duplicate-recipient hard error; determinism 6 passed (separate interpreters);
+Invariant-3 formula exact in reward_compiler.py (max(0, improvement - margin), min-sample+unidentified
+force 0, integer round-half-even); specs/ + test-vectors/ + canonical.py + reward.py UNMODIFIED;
+single encoder (imports verifier-cli/reference by path; only json.dumps in demo.py, off the hash path).
+
+**⚠ M3 BUNDLE-SEAM MISMATCH (orchestrator-owned integration, NOT yet resolved) — verifier CLI stays HELD:**
+The two agents designed the analysis.json + rewards.parquet contract INDEPENDENTLY and they do not
+interoperate. Both sides are internally correct + gate-green; the break is purely at the assembly seam.
+- rewards.parquet: evidence-service assembler expects ONE file = the on-chain LEAF SET, cols
+  (leaf_index, recipient_pubkey, amount_base_units, leaf_hash_hex), and REFUSES to seal a non-conforming
+  bundle. causal-engine emits TWO files: rewards.parquet = per-(cohort,recipient) Stage-2 DETAIL (cols
+  cohort_id/recipient_hex/weight/…) + reward_leaves.parquet = the leaf set (col recipient_hex, NOT
+  recipient_pubkey). So engine's "reward_leaves.parquet" ≈ backend's "rewards.parquet".
+- analysis.json: assembler validates a top-level `evidence_epoch_roots` (must == roots it built) + a
+  `result{effect_micro,standard_error_micro,conservative_effect_micro,…}` block + `missingness_handling`;
+  its sha256 IS the result_artifact_hash. Engine emits richer `primary_estimate{…_s}` + `reward_summary
+  {reward_root_hex}` + `cohorts[]` + `excluded_records`, NO top-level evidence_epoch_roots, different key
+  names, missingness under design.missingness_policy + excluded_records. Assembler would REJECT it.
+- WHY NOT hand-merged now: editing either side's byte-stable parquet/JSON output could shift their frozen
+  determinism goldens (143/78 green) — must be done by the owning agent, and the analysis.json normative
+  key schema decides what the M3 verifier gate ("reproduce result hash from the bundle") asserts → needs
+  ratification, not an orchestrator guess. ORCHESTRATOR LEAN (to confirm with both owners + architect):
+  bundle `rewards.parquet` = the LEAF SET (settlement+verifier consume it; that's what the root commits),
+  engine's per-cohort table becomes a supplementary `rewards_detail.parquet`; standardize the leaf-set
+  column name (recipient_pubkey vs recipient_hex — both 64-hex strings, bikeshed, pick one in spec);
+  analysis.json = engine's richer schema is source-of-truth for CONTENT but MUST add top-level
+  evidence_epoch_roots (echoed from bundle roots) + expose the primary result under the keys the
+  assembler validates (or relax the assembler to the engine's names). Assign the small adapter work to
+  causal-eng (its output the assembler consumes) on its next turn (after 3am) + a tiny assembler tweak to
+  backend. This is the gate to un-HOLD the verifier CLI (task 3).
+
+**SPEC ITEMS QUEUED FOR protocol-architect (ONE batched round; 9 items total):**
+From backend (4): §6.2 participant leaf/sort key still UNPINNED (backend stamps PROVISIONAL-UNPINNED-6.2,
+those hashes WILL MOVE on ratify); bundle_logical_hash vs bundle_content_hash normativity (decides what
+the M3 gate asserts, ties to the analysis.json question above); add manifest.evidence_schedule
+{epoch_count,epoch_seconds,expected_cohort_coverage,missingness_action} + frozen missingness policy;
+add rejection codes AGGREGATE_SUMMARY_INCONSISTENT + TIME_RANGE_INVALID.
+Plus pre-existing: multi-batch epoch sub-roots → singular on-chain EvidenceEpoch.{signer_set_root,
+observations_root} (roots.json already publishes ordered per-batch lists + notes.on_chain_epoch_field_mapping).
+From causal-engine (docs/modeling-notes.md §6, 5 items): (1) add design.parameters.missingness_policy
+∈{ineligible,impute_cohort_mean} as REQUIRED frozen field (engine defaults to strictest=ineligible) —
+OVERLAPS backend's missingness item, reconcile as one; (2) add/clarify hac_bandwidth_blocks; (3)
+reward-policy.md Stage-1: state whether a design not eligible_for_strong_causal_claim may still settle
+(engine reads conservative = no positive payout, discovery-only analysis.json); (4) reword Stage-1
+"cohort c" ambiguity (geo-cohort vs geo×block); (5) ⚠ NO cross-cohort MULTIPLICITY control — one-sided 5%
+applied independently per cohort → true-null network of N cohorts pays ~5% of them; on sim s2_null_effect
+engine paid ≈29.6% of budget to 2/60 cohorts under TRUE zero effect. DISCLOSED design property, not an
+estimator bug. Architect decides: freeze a family-wise-adjusted critical_value_micro (Bonferroni/Šidák
+over known cohort count) OR document the false-positive spend as accepted policy cost in the benchmark report.
+
 **ALL M3 PREREQUISITES (P1-P4) LANDED + VERIFIED. M3 CORE DISPATCH (original 2026-07-23):**
 - backend-data-engineer (a71719f6): evidence pipeline (ingestion, dedup, content-addressed batches, §6.5 evidence roots — must reproduce evidence-0x goldens) + full audit bundle assembler (byte-stable Parquet). Owns bundle structure + participants/assignment/evidence parquet + roots.json + provenance. Off-chain only; on-chain EvidenceEpoch mapping deferred.
 - causal-inference-engineer (a330baac): estimators (cluster-robust SE) + balance/min-sample/sensitivity + reward compiler (Stage-1 conservative LCB max(0,effect-crit*se), no payout under min-sample or <=0; Stage-2 CRP-WS1 split; aggregate-per-recipient leaf-set — must reproduce reward-0x goldens) + analysis.json + rewards.parquet + container digest. Also confirms 2 switchback/matched modeling notes.
