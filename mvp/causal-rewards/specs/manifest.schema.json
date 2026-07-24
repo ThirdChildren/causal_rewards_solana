@@ -258,6 +258,7 @@
           "enum": ["diff_in_means", "cluster_robust_ols", "switchback_hac", "matched_pair_diff"]
         },
         "standard_error_method": {
+          "description": "Frozen SE method (Invariant 1). Enum semantics: 'cluster_robust' = CR1 cluster-robust sandwich on the cohort; 'matched_pair' = paired SE within a frozen matched stratum; 'classical' = homoskedastic OLS SE. 'hac' has NO frozen bandwidth field and MUST NOT be interpreted as a kernel with an analysis-time bandwidth (that would be an unfrozen analyst degree of freedom, Invariant 1); for template=switchback it is defined narrowly as UNRESTRICTED CLUSTERING ON THE GEO GROUP (arbitrary within-geo serial correlation, strictly more general than a truncated Newey-West kernel). This narrowing resolves the former hac_bandwidth_blocks open item as documentation; no bandwidth field is added. See causal-engine/docs/modeling-notes.md §1.",
           "enum": ["cluster_robust", "hac", "matched_pair", "classical"]
         },
         "test_sidedness": {

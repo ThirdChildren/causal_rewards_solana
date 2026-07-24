@@ -714,11 +714,89 @@ switchback and matched_cluster assignment roots (§7.4) and the reward and evide
 reproduced by feeding the canonical example manifest through this exact serializer — no assumed field
 layout, only §2–§5 applied to the JSON value.
 
+### 8.1 Bundle content-addressing and the M3 reproduction gate (RULING)
+
+The audit bundle (`protocol.md` §4: `manifest.json`, `participants.parquet`, `assignment.parquet`,
+`evidence/*.parquet`, `analysis.json`, `rewards.parquet`, `roots.json`, `provenance.json`) can be
+addressed two ways, and the assembler computes both:
+
+- **`bundle_content_hash`** — a hash over the **exact file bytes** of the bundle. It is
+  **NOT byte-stable across environments**: Apache Parquet embeds a `created_by` string and admits
+  encoder/compression variation, so two conforming producers on different `pyarrow` versions emit
+  byte-different Parquet for identical logical tables. `bundle_content_hash` therefore depends on the
+  container encoder, not only on the protocol content.
+- **`bundle_logical_hash`** — a hash over the bundle's **canonical logical commitment set**: the
+  ordered set of protocol roots and canonical-artifact hashes the protocol actually commits
+  (the manifest hash; the participant, assignment, evidence epoch/signer/observation roots; the
+  per-batch sub-root lists; the `result_artifact_hash` = `SHA-256` over `analysis.json`'s canonical
+  bytes; the `reward_root`). Concretely `bundle_logical_hash = SHA-256(CJSON(L))`, where `L` is the
+  `roots.json` logical object serialized under §2–§5 (stable ASCII-key ordering, string-encoded
+  values, no Parquet bytes). It is **portable and cross-machine**: it is invariant to `pyarrow`
+  version, compression, and row-group layout because it never hashes Parquet bytes — only the
+  §2–§5-canonical projection of the committed roots.
+
+**RULING (normative).** `bundle_logical_hash` is the **normative** object for the M3 acceptance gate
+("independent reproduction from the bundle"). The gate is satisfied iff an independent party, from the
+bundle and with zero network access (`protocol.md` §5), **recomputes every entry of the logical
+commitment set `L` from the underlying tables and each equals the corresponding on-chain
+commitment** — equivalently, recomputes `bundle_logical_hash` and it matches. Reproducibility
+(Invariant 2) is a property of the protocol's committed roots, not of the Parquet container, so
+requiring byte-identical Parquet across environments would make honest reproduction spuriously fail
+while adding no integrity the roots do not already provide.
+
+`bundle_content_hash` is **advisory only**: it is retained for exact-byte provenance, caching, and
+dedup within a single producer environment, and it MUST NOT gate M3 acceptance or a challenge outcome.
+A `bundle_content_hash` mismatch under an equal `bundle_logical_hash` is a container-encoding
+difference (a *finding* at most, per §6.5.1's rejection-vs-finding distinction), never a reproduction
+failure. Note the individual `BUNDLE_CONTENT_ADDRESS_MISMATCH` code (§6.5.1) still applies to a file
+whose recomputed content hash disagrees with the hash `roots.json` names it by *within one bundle* —
+that is per-file integrity inside a fixed environment, distinct from cross-environment byte-stability
+of the whole bundle addressed here.
+
 ## 9. Revision history
 
 The wire/hash contract version and this document's version advance together (both `serialization.md`
 is wholly the wire/hash contract). A change that alters no byte of any existing hashed artifact is an
 **additive minor**; a change that alters a golden is a **major** and a manifest `spec_version` bump.
+
+### 1.1.0 addendum — evidence ingestion codes + epoch sub-root mapping (additive, hash-compatible)
+
+Recorded in the M3 spec round (2026-07-24). **The wire/hash contract version stays 1.1.0**: every
+change here is additive and alters **no byte** of any existing hashed artifact — manifest golden
+`74e0bb82…`, `reward_curve_hash` `14b0ec34…`, evidence example `901b08d5…`, and all 11 `assign-*`
+roots are byte-identical. The manifest `spec_version` field stays `"1.0.0"`. No schema field,
+example, or golden changed.
+
+- **§6.5.1 evidence-ingestion rejection codes (additive to the wire contract).** The rejection-code
+  table is part of the wire contract (golden vectors name the codes, SDKs surface them, the dashboard
+  renders them). **Adding** a code is an additive change; **renaming** one would be breaking. This
+  round documents two already-enforced codes as first-class entries — `TIME_RANGE_INVALID` (malformed
+  or inverted batch `time_range`) and `AGGREGATE_SUMMARY_INCONSISTENT` (`aggregate_summary` integer
+  counts disagree with the committed member sets / declared sub-commitments) — alongside the existing
+  codes. `evidence.schema.json` expresses the structural side (types, patterns); the codes are this
+  table's contract, not the schema's, so `evidence.example.json` is unchanged and its golden is
+  undisturbed.
+- **§6.5.2 epoch sub-root → singular on-chain field mapping (additive; defines an on-chain field,
+  changes no hashed off-chain byte).** Pins how a multi-batch epoch's `n` per-batch signer/observation
+  sub-roots combine into the singular `EvidenceEpoch.{signer_set_root, observations_root}` account
+  fields via `combine(L)`: `n==0 →` 32 zero bytes (§6.4), `n==1 →` the sole batch's sub-root verbatim
+  (identity — the dominant single-batch pilot case is unchanged on-chain), `n≥2 →` the sub-roots
+  treated as one Merkle level of already-hashed nodes combined with the §6.1 interior formula
+  (`0x01`) + §6.3 promotion. Second-preimage separation is preserved (sub-roots carry the `0x00`
+  leaf prefix, accumulation nodes the `0x01` prefix). Recomputable from `roots.json`'s ordered
+  per-batch sub-root lists with no re-ingest. This defines the meaning of an on-chain field; it
+  introduces no new off-chain hashed artifact and moves no existing one.
+- **§8.1 bundle content-addressing ruling (prose ruling, no hashed byte).** Ruled `bundle_logical_hash`
+  (portable, cross-machine, over the §2–§5-canonical commitment set) NORMATIVE for the M3
+  reproduction gate; `bundle_content_hash` (exact Parquet bytes, `pyarrow`-version-scoped) advisory
+  only. Parquet is not byte-stable across `pyarrow` versions, so the gate asserts the committed
+  roots, not the container bytes. Moves no artifact.
+- **`hac` SE-method narrowing (schema description only).** Narrowed the `standard_error_method`
+  enum documentation in `manifest.schema.json` so `hac` for `switchback` means "unrestricted
+  clustering on the geo group" with no frozen bandwidth field — resolving the former
+  `hac_bandwidth_blocks` open item as documentation, not a new frozen field. Schema `description`
+  only; `manifest.example.json` uses `cluster_robust` and is unchanged, so the manifest golden is
+  undisturbed.
 
 ### 1.1.0 — residual closure (additive, hash-compatible)
 

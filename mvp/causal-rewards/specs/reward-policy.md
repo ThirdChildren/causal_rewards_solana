@@ -285,3 +285,36 @@ weight is the linear term `1 · quality_adjusted_observations`:
 This example is illustrative of the arithmetic, not a golden vector; deterministic reward-root
 vectors are produced by `verifier-reproducibility-engineer` against `serialization.md` once
 ratified.
+
+## Appendix A — multiplicity & concentration control (NON-NORMATIVE)
+
+**This appendix is NON-NORMATIVE and changes no frozen behavior.** The frozen Stage-1 test is
+applied **independently per cohort at a one-sided 5% level with no family-wise correction**
+(`multiplicity_control` default = `none`). This is a disclosed property, not an estimator bug: on the
+`s2_null_effect` simulator scenario the compiler paid ≈29.6% of the budget to 2 of 60 cohorts under a
+**true zero effect** (`docs/multiplicity-study.md`).
+
+The architect recommendation for changing this (`specs/multiplicity-recommendation.md`) is summarized
+here for the reader; **none of it is in force until a v1.2 migration is signed off**
+(`specs/v1.2-migration-proposal.md` Item B3):
+
+- **Two channels, two instruments.** A p-value threshold controls *how many* null cohorts clear the
+  test (the **discovery** channel) but **not** *how much budget* survivors absorb (the
+  **concentration** channel). Under a true null the fixed budget does not shrink — it **concentrates**
+  via `proportional_scale_to_budget`, so a single chance-winner still takes ~26% of `B` even after a
+  correction cuts the false-positive count 2 → 1.
+- **Recommended threshold: Benjamini–Hochberg FDR (α = 0.05)** over the candidate cohort family —
+  it bounds the *fraction of paid cohorts that are null* (the analogue of wasted spend) while
+  preserving far more power than Bonferroni/Šidák, whose `α/m ≈ 0.0008` cut would make "most cohorts
+  get zero" the default outcome (the #1 risk-register item). BH is deterministic ⇒ frozen-manifest
+  compatible.
+- **Recommended structural fix: a conservative-effect floor** — a curve breakpoint `["f_s","0"]`
+  below which `alloc_c = 0`, so a marginal survivor with a tiny conservative effect earns nothing and
+  cannot absorb a disproportionate share. This is the curve-side lever the threshold cannot provide;
+  a per-cohort budget cap (`max_cohort_share_micro`, new field) is an opt-in stronger bound, not the
+  recommended default.
+
+If adopted, `multiplicity_control` (with an FDR level) and the floor breakpoint become frozen manifest
+content — both hash-moving, both in the v1.2 proposal with computed goldens. Until then, the
+one-sided 5% independent test and the current `reward_curve` remain the sole frozen policy, and a
+null field of cohorts correctly returns budget (Invariant 8).
