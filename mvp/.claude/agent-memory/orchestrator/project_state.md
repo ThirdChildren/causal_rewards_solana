@@ -87,15 +87,18 @@ interoperate. Both sides are internally correct + gate-green; the break is purel
 - WHY NOT hand-merged now: editing either side's byte-stable parquet/JSON output could shift their frozen
   determinism goldens (143/78 green) — must be done by the owning agent, and the analysis.json normative
   key schema decides what the M3 verifier gate ("reproduce result hash from the bundle") asserts → needs
-  ratification, not an orchestrator guess. ORCHESTRATOR LEAN (to confirm with both owners + architect):
-  bundle `rewards.parquet` = the LEAF SET (settlement+verifier consume it; that's what the root commits),
-  engine's per-cohort table becomes a supplementary `rewards_detail.parquet`; standardize the leaf-set
-  column name (recipient_pubkey vs recipient_hex — both 64-hex strings, bikeshed, pick one in spec);
-  analysis.json = engine's richer schema is source-of-truth for CONTENT but MUST add top-level
-  evidence_epoch_roots (echoed from bundle roots) + expose the primary result under the keys the
-  assembler validates (or relax the assembler to the engine's names). Assign the small adapter work to
-  causal-eng (its output the assembler consumes) on its next turn (after 3am) + a tiny assembler tweak to
-  backend. This is the gate to un-HOLD the verifier CLI (task 3).
+  ratification, not an orchestrator guess.
+  **RATIFIED 2026-07-24 (user-approved, no agent; full text docs/m3-integration-and-spec-round.md §1;
+  committed 3c7b8ef):** bundle `rewards.parquet` = the LEAF SET; engine's per-cohort table →
+  `rewards_detail.parquet`; leaf-set column = `recipient_hex` (64-hex — matches the reward-0x goldens +
+  engine; change the side that does NOT reproduce goldens, i.e. backend's assembler: rename
+  recipient_pubkey→recipient_hex + decode bytes.fromhex not base58, one line class). analysis.json =
+  engine's richer schema normative for CONTENT + ADD top-level evidence_epoch_roots (assembler validates
+  == roots it built); assembler validator relaxes to engine key names. PREIMAGE-INVARIANCE CONFIRMED
+  against source (reward.py): §6.6 preimage consumes 32 RAW bytes; hex/base58 both decode to the same
+  bytes → reward roots a9c35cf4/ea943182/b882c899 byte-identical → presentation only, NOT a v1.2
+  migration. Adapter = causal-eng next turn (§1.2); assembler tweak = backend (§1.3). This is the gate to
+  un-HOLD + build the verifier CLI (task 3, the M3 acceptance oracle).
 
 **SPEC ITEMS QUEUED FOR protocol-architect (ONE batched round; 9 items total):**
 From backend (4): §6.2 participant leaf/sort key still UNPINNED (backend stamps PROVISIONAL-UNPINNED-6.2,
@@ -113,8 +116,20 @@ reward-policy.md Stage-1: state whether a design not eligible_for_strong_causal_
 "cohort c" ambiguity (geo-cohort vs geo×block); (5) ⚠ NO cross-cohort MULTIPLICITY control — one-sided 5%
 applied independently per cohort → true-null network of N cohorts pays ~5% of them; on sim s2_null_effect
 engine paid ≈29.6% of budget to 2/60 cohorts under TRUE zero effect. DISCLOSED design property, not an
-estimator bug. Architect decides: freeze a family-wise-adjusted critical_value_micro (Bonferroni/Šidák
-over known cohort count) OR document the false-positive spend as accepted policy cost in the benchmark report.
+estimator bug.
+**USER WIDENED THE FRAME 2026-07-24 (do NOT use the binary {none vs Bonferroni}; full text docs
+m3-integration-and-spec-round.md §2):** Bonferroni over ~60 cohorts → per-cohort α≈0.0008, crushes power,
+turns our #1 risk-register item (most cohorts get zero/uncertain value) into the DEFAULT. Leading candidate
+= FDR / Benjamini-Hochberg — FWER controls prob of ANY error, but we allocate a BUDGET across many cohorts
+and care about the PROPORTION OF SPEND WASTED = what FDR controls; BH deterministic → frozen-manifest
+compatible. STRUCTURAL point architect must also rule (not just threshold): under a true null the fixed
+budget CONCENTRATES (does not shrink proportionally) — true-zero cohorts get nothing so a few false
+positives absorb disproportionate spend; a threshold fix mitigates but does not remove this → decide
+whether the reward CURVE / value_scale carries part of the fix. DATA-GATED: causal-eng runs 6 scenarios ×
+4 regimes (none/Bonferroni/Šidák/BH) reporting per regime {share of budget to true-null cohorts, share of
+true-positive cohorts correctly paid, total deployed vs recovered}; architect writes recommendation
+AGAINST that data. Benchmark-report material regardless of choice. Any adopted correction that adds/changes
+a frozen manifest field = hash-moving v1.2.
 
 **ALL M3 PREREQUISITES (P1-P4) LANDED + VERIFIED. M3 CORE DISPATCH (original 2026-07-23):**
 - backend-data-engineer (a71719f6): evidence pipeline (ingestion, dedup, content-addressed batches, §6.5 evidence roots — must reproduce evidence-0x goldens) + full audit bundle assembler (byte-stable Parquet). Owns bundle structure + participants/assignment/evidence parquet + roots.json + provenance. Off-chain only; on-chain EvidenceEpoch mapping deferred.
