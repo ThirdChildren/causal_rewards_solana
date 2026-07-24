@@ -38,6 +38,23 @@ architect batch each died mid-run on the session limit; BOTH partials verified c
   bundle-hash-normativity ruling (logical vs content), item 7 HAC, Part B v1.2-migration-proposal.md
   (participant §6.2 + evidence_schedule/missingness, WITH computed new golden — DRAFT ONLY, user sign-off),
   Part C multiplicity-recommendation.md against docs/multiplicity-study.md.
+  **SPEC ROUND COMPLETE + committed 3252aab (2026-07-24).** Part A applied (non-hash, goldens intact,
+  example still validates): §8.1 RULING bundle_logical_hash NORMATIVE for M3 gate / bundle_content_hash
+  advisory (item 2); §9 1.1.0 addendum; manifest.schema.json HAC description narrowing (item 7, no field);
+  reward-policy Appendix A non-normative. Part B/C = DRAFT docs (nothing applied, user sign-off gate):
+  specs/v1.2-migration-proposal.md + specs/multiplicity-recommendation.md.
+  **COMPUTED v1.2 HASH COSTS (for USER decision — nothing adopted):** participant §6.2 pin moves the
+  participant/bundle root, NOT the manifest; missingness (evidence_schedule + design.parameters.
+  missingness_policy, items 3+6 folded) manifest 74e0bb82 → ac2b4bdc; conservative-effect FLOOR (curve
+  breakpoint, no new field) reward_curve_hash 14b0ec34 → sha256:0123783e; FULL v1.2 (B2+B3) manifest →
+  98490aa3. Adopting any = wire/hash 1.1.0→1.2.0 + manifest spec_version "1.0.0"→"1.2.0". CAVEAT flagged
+  by architect: evidence_schedule.expected_cohort_coverage needs a §2.2 _micro scale entry/rename —
+  recommend collapsing that field before adopting B2.
+  **MULTIPLICITY RECOMMENDATION (architect, vs study):** threshold = Benjamini-Hochberg FDR α=0.05 (keeps
+  power vs Bonferroni/Šidák whose α/m≈0.0008 makes "most cohorts get zero" the default; deterministic →
+  frozen-compatible). STRUCTURAL RULING: the CURVE must carry part of the fix — threshold bounds fraction
+  of PAID cohorts null, not fraction of BUDGET; recommended lever = conservative-effect floor as curve
+  breakpoint (per-cohort cap opt-in, not default). Default stays `none` until user sign-off. USER DECIDES.
 LESSON REINFORCED: long specialist runs die on session limits; ALWAYS verify partials on disk + commit
 coherent slices + re-dispatch build-on, rather than assume completion. Manifest 74e0bb82 + evidence
 901b08d5 reproduce intact after all committed edits; verify_vectors.py exit 0.
