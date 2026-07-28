@@ -55,6 +55,21 @@ M2 — Programs & SDK (wk 5-9) ......... ACCEPTED-PENDING-DEPLOY (NOT done; devn
   re-run against devnet. BLOCKER: funded devnet keypair + RPC. OWNER: user. Everything is ready to run
   the moment credentials are supplied — ping the user for them at the START of each session until closed.
 
+  EXACT COSTS (computed on this machine 2026-07-28, not estimated — see docs/m4-plan.md §1):
+    - Wallet yP8HDbBX5f1CP2YzbhHhQ6GT31zggaDiRmt5dDMVe2Q IS the CLI default
+      (`solana address -k ~/.config/solana/id.json` matches), so deploy-devnet.sh needs no flags.
+    - Total program bytes 1,231,920 (experiment_registry 384,984 / settlement 382,384 /
+      challenge 294,232 / evidence_registry 170,320). `solana rent 1231920` = 8.57505408 SOL.
+    - Fund ~17.2 SOL PEAK (buffer + program-data accounts are rent-exempt simultaneously during
+      deploy); ~8.58 SOL stays resident afterwards. Balance at 2026-07-28: 0 SOL.
+    - `solana airdrop 2` is rate-limited per request; faucet.solana.com (GitHub auth) has higher limits.
+    - RENT RECLAIM: `solana program close --buffers` recovers rent from LEAKED buffer accounts left
+      by a FAILED/interrupted deploy (a clean deploy consumes its buffer, nothing to reclaim).
+      Recovering the resident ~8.58 SOL needs `solana program close <PROGRAM_ID>`, which PERMANENTLY
+      retires that program ID — never do this between test redeploys. Redeploys to an existing
+      program ID reuse the program-data account and cost only fees + any rent delta if the binary
+      grew, so the ~8.58 SOL is a ONE-TIME cost.
+
   Interim confirmation done (localnet, 2026-07-23): scripts/localnet-test.sh -> build + validator +
   all 4 programs deployed + ts-mocha 18/18 passing, exit 0 (orchestrator ran it directly). Solana
   toolchain 4.1.1 at ~/.local/share/solana/install/active_release/bin (off PATH; export it to run).
@@ -120,7 +135,11 @@ M3 (superseded) — Evidence & causal engine (wk 10-14) ...... CORE LANDED, INTE
     Both: one encoder only (import verifier-cli/reference by path), specs/+test-vectors/
     UNMODIFIED, no golden bent to code. Each agent's async task died with its session;
     output verified ON DISK before acceptance (lesson: async agents don't survive session end).
-  OPEN — BUNDLE SEAM (blocks the M3 acceptance gate): the two components' analysis.json
+  RESOLVED — everything below this line under M3 is now CLOSED. The bundle seam was ratified and
+  round-tripped, the spec round landed (non-hash part), and the verifier CLI shipped (a087efb),
+  making the M3 gate MET + orchestrator-verified. Kept verbatim as the reasoning record.
+
+  CLOSED — BUNDLE SEAM (blocked the M3 acceptance gate): the two components' analysis.json
   + rewards.parquet contracts were designed independently and don't interoperate.
     RATIFIED reconciliation (no hash move; see docs/m3-integration-and-spec-round.md §1):
     bundle rewards.parquet = the leaf set (col recipient_hex, matching the reward-0x
@@ -154,9 +173,44 @@ M3 (superseded) — Evidence & causal engine (wk 10-14) ...... CORE LANDED, INTE
     the already-written proposal doc + the §2.2 recommendation once §2.1 data exists;
     (3) backend one-line assembler tweak §1.3; (4) then un-HOLD + build the verifier CLI (M3 oracle).
 
-M4 — Pilot, hardening, release (wk 15-20) .................. NOT STARTED
+M4 — Pilot, hardening, release (wk 15-20) .................. PLANNED; dashboard STARTED
   Acceptance test: tagged OSS release + public dashboard + benchmark report +
   resolved security-review findings.
+  FULL PLAN: causal-rewards/docs/m4-plan.md — 13 tasks with owner / dependency / acceptance test.
+  Only the dashboard is cleared to build before the v1.2 decision (it reads committed state and
+  keeps reward-policy semantics behind a thin adapter). Everything consuming reward policy —
+  above all the AT-SCALE BENCHMARK — is sequenced AFTER the v1.2 decision, because the benchmark
+  report publishes exactly the numbers under debate and must not be run twice.
+
+  *** OPEN — THE MULTIPLICITY / v1.2 QUESTION WAS REOPENED BY THE USER 2026-07-28. ***
+  User ruling 1: decisions "adopt v1.2" and "multiplicity policy" are ONE decision, not two. The
+  conservative-effect floor is part of the multiplicity remedy AND moves reward_curve_hash, so
+  adopting BH while staying on v1.1 would ratify half a package. Whatever is adopted lands as ONE
+  coherent v1.2 (missingness + winning remedy), never piecemeal.
+  User ruling 2: 29.6% -> 25.9% waste is a THIN return for a hash-moving migration. Verify the
+  STRUCTURAL explanation before buying the statistical one.
+
+  ORCHESTRATOR FINDING (2026-07-28, verified against source — agents are re-checking it):
+    The user hypothesised that the fixed budget is NORMALIZED (fully deployed, each cohort taking
+    a SHARE), contradicting CLAUDE.md's absolute `value_scale * conservative_effect`. THAT
+    HYPOTHESIS APPEARS FALSE. causal-engine/src/crp_engine/reward_compiler.py:291-301 is ABSOLUTE:
+        allocs = [piecewise_linear(v.conservative_s, rp.breakpoints) ...]; S = sum(allocs)
+        if S <= B: budgets = allocs            # no scaling at all
+        else:      budgets = [(a*B)//S ...]    # proportional_scale_to_budget is DOWNWARD-ONLY
+    There is no up-normalization anywhere, so unused budget IS already recovered — the study's own
+    s2_null_effect row reports deployed 29.61% / recovered 70.39%.
+    => The "structural fix" the user hoped for is ALREADY SHIPPED and does NOT drop null spend to
+       near zero. The `none` row IS "absolute scale + recovery, no correction".
+    => DOCUMENTATION DEFECT: the "Structural note" in docs/multiplicity-study.md WRONGLY claims
+       "proportional_scale_to_budget divides the whole budget across whichever cohorts clear the
+       test" — refuted by its own recovered=70.39% column. That wrong prose is what propagated the
+       bad mental model. Being corrected.
+    => THE REAL PROBLEM, and it is worse than the multiplicity framing: under Bonferroni/Sidak/BH
+       the false-positive COUNT drops 2 -> 1 but waste only drops 29.61% -> 25.94%. ONE noise-driven
+       cohort absorbs ~26% of the entire budget. That is REWARD-CURVE CALIBRATION: statistical
+       significance does all the gating, ECONOMIC significance does none. Hence the decisive new
+       study arms are FLOOR-ONLY (no multiplicity correction) and a PER-COHORT CAP — either could
+       make the statistical correction unnecessary and save a frozen field.
 
 MILESTONE GATING: do not start a milestone until the prior one's acceptance test
 passes and is demonstrated. Frozen M1 spec is a hard dependency for M2 and M3.
