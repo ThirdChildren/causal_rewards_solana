@@ -136,9 +136,32 @@ export interface ExperimentView {
   cluster: string;
 }
 
+/**
+ * One signed evidence batch header inside an epoch, as published in the epoch table.
+ *
+ * INVARIANT 5: every field here is a cohort identifier, a commitment, a timestamp or a
+ * count. Raw observations live behind `observationsRootHex` and never enter a bundle.
+ */
+export interface EvidenceBatchView {
+  leafHashHex: string;
+  cohortId: string | null;
+  timeStart: string | null;
+  timeEnd: string | null;
+  signerSetRootHex: string | null;
+  signerCount: string | null;
+  observationsRootHex: string | null;
+  observationLeafCount: string | null;
+  acceptedCount: string | null;
+  rejectedCount: string | null;
+  distinctSigners: string | null;
+  batchSignerPubkey: string | null;
+}
+
 export interface EvidenceEpochView {
   epochIndex: number;
   rootHex: string;
+  /** Per-batch detail when the epoch table publishes it; empty when it carries leaves only. */
+  batches: EvidenceBatchView[];
   /** Bundle-side: the parquet file that reproduces this root. */
   file: string | null;
   leafCount: number | null;
@@ -155,43 +178,123 @@ export interface EvidenceEpochView {
   producer: string | null;
 }
 
+/**
+ * The primary effect, on the manifest's frozen scale.
+ *
+ * Every number is a scaled *integer string* exactly as committed. `scaleExponent` is the
+ * frozen `estimand.effect_scale` (-6 = micro); the UI formats with it and never parses a
+ * float. `improvement` is the effect after the frozen positive-improvement transform, so
+ * "larger is better" holds regardless of the outcome's improvement direction.
+ */
 export interface PrimaryEffect {
-  pointEstimateMicro: string;
-  standardErrorMicro: string;
-  conservativeEffectMicro: string;
+  effectS: string;
+  standardErrorS: string;
+  /** Effect converted to positive-improvement orientation. Null on the minimal artifact. */
+  improvementS: string | null;
+  /** critical_value × standard_error — the width the conservative rule subtracts. */
+  marginS: string | null;
+  /** max(0, improvement − margin). The only quantity that can drive a payout. */
+  conservativeS: string;
+  scaleExponent: number;
+  nUnits: string | null;
+  nClusters: string | null;
+  clusterRobustDf: string | null;
+  seMethod: string | null;
 }
 
 export interface CohortResultRow {
   cohortId: string;
-  arm: string | null;
-  pointEstimateMicro: string | null;
-  standardErrorMicro: string | null;
-  conservativeEffectMicro: string | null;
-  eligible: boolean | null;
+  effectS: string | null;
+  standardErrorS: string | null;
+  improvementS: string | null;
+  marginS: string | null;
+  conservativeS: string | null;
+  allocationBaseUnits: string | null;
+  identified: boolean | null;
+  identificationMode: string | null;
+  meetsMinimumSample: boolean | null;
   /** Why a cohort contributed nothing. Rendered as a first-class outcome, never an error. */
-  exclusionReason: string | null;
-  observations: string | null;
+  exclusionReasons: string[];
+  nObservations: string | null;
+  nTimeBlocks: string | null;
+  nTreatedBlocks: string | null;
+  nControlBlocks: string | null;
+  note: string | null;
 }
 
 export interface SensitivityRow {
   name: string;
-  /** Free-form committed summary; rendered verbatim. */
-  detail: string;
+  kind: string | null;
+  /** The engine's own verdict: `ok`, `skipped`, `warn`… Rendered verbatim, never re-judged. */
+  status: string | null;
+  note: string;
+  values: Record<string, string>;
+}
+
+export interface BalanceCovariate {
+  name: string;
+  smdMicro: string;
+  passed: boolean | null;
+}
+
+export interface BalanceReport {
+  present: boolean;
+  passed: boolean | null;
+  thresholdMicro: string | null;
+  maxAbsSmdMicro: string | null;
+  treatedShareMicro: string | null;
+  /** The engine states whether balance gates payout. We display it; we never infer it. */
+  gatesPayout: boolean | null;
+  covariates: BalanceCovariate[];
+}
+
+export interface IdentificationReport {
+  present: boolean;
+  perCohortMode: string | null;
+  supportsStrongCausalClaim: boolean | null;
+  assumptions: string[];
+  /** The engine's own standing caveat (invariant 6). Rendered verbatim wherever results are. */
+  caveat: string | null;
+}
+
+export interface ExcludedRecords {
+  total: string | null;
+  byReason: Array<{ reason: string; count: string }>;
+}
+
+export interface RewardSummaryView {
+  rewardRootHex: string | null;
+  budgetBaseUnits: string | null;
+  totalLeafBaseUnits: string | null;
+  recoverableBaseUnits: string | null;
+  leafCount: string | null;
+  nEligibleCohorts: string | null;
+  scaledToBudget: boolean | null;
+  droppedZeroSumRecipients: string | null;
+  /** True when the frozen rules compiled NO positive payout. A valid outcome (invariant 8). */
+  nullDistribution: boolean;
+  nullReasons: string[];
 }
 
 export interface ResultView {
   present: boolean;
-  estimand: string | null;
+  estimandStatement: string | null;
+  estimandUnitType: string | null;
+  improvementDirection: string | null;
+  scaleExponent: number;
   specVersion: string | null;
   engineName: string | null;
+  engineVersion: string | null;
   analysisContainerDigest: string | null;
-  resultArtifactHashHex: string | null;
   primaryEffect: PrimaryEffect | null;
   evidenceEpochRoots: string[];
-  rewardSummary: { rewardRootHex: string | null; totalBaseUnits: string | null } | null;
+  rewardSummary: RewardSummaryView | null;
   cohorts: CohortResultRow[];
   excluded: CohortResultRow[];
+  excludedRecords: ExcludedRecords;
   sensitivity: SensitivityRow[];
+  balance: BalanceReport;
+  identification: IdentificationReport;
   /** Anything else committed in analysis.json, shown raw so nothing is hidden. */
   raw: Record<string, unknown> | null;
 }

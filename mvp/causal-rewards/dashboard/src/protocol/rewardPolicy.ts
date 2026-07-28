@@ -135,6 +135,37 @@ export function describeConservativeRule(manifest: FrozenManifest | null): strin
   );
 }
 
+/**
+ * Render a value committed on the frozen scale (`estimand.effect_scale`, e.g. `-6` = micro).
+ * Exact string arithmetic; a committed integer never becomes a JS number.
+ */
+export function formatScaled(value: string | null, scaleExponent: number): string {
+  if (value === null || value === "") return "—";
+  return microToDecimalString(value, Math.max(0, -scaleExponent));
+}
+
+/**
+ * Group a mint base-unit integer for reading. We do NOT divide by a decimals factor: the
+ * frozen manifest pins a mint address, not a decimals count, so converting would be an
+ * invention. The UI always labels the unit as "base units".
+ */
+export function formatBaseUnits(value: string | null): string {
+  if (value === null || value === "") return "—";
+  if (!/^-?\d+$/.test(value)) return value;
+  const neg = value.startsWith("-");
+  const digits = neg ? value.slice(1) : value;
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${neg ? "-" : ""}${grouped}`;
+}
+
+/** Exact integer share as parts-per-ten-thousand, for a bar width. Never a payout number. */
+export function shareOf(part: string | null, whole: string | null): number | null {
+  if (!part || !whole || !/^\d+$/.test(part) || !/^\d+$/.test(whole)) return null;
+  const w = BigInt(whole);
+  if (w === 0n) return null;
+  return Number((BigInt(part) * 10000n) / w) / 10000;
+}
+
 /** Render a micro-scaled integer string as a decimal string. Exact — no float arithmetic. */
 export function microToDecimalString(micro: string, scale = 6): string {
   if (!/^-?\d+$/.test(micro)) return micro;

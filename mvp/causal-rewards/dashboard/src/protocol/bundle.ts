@@ -14,16 +14,22 @@ import { readLogicalTable } from "./parquet";
 import { assertCohortLevelColumns } from "./privacy";
 import type {
   AssignmentRow,
+  BalanceReport,
   BundleFiles,
   CohortResultRow,
   DistributionView,
+  EvidenceBatchView,
   EvidenceEpochView,
+  ExcludedRecords,
   FrozenManifest,
+  IdentificationReport,
+  PrimaryEffect,
   ProvenanceRecord,
   PublishedRoots,
   ResultView,
   RewardLeafView,
   RewardPolicyRaw,
+  RewardSummaryView,
   SensitivityRow,
 } from "./types";
 
@@ -234,32 +240,105 @@ export function parseProvenance(raw: Record<string, unknown> | null): Provenance
 /**
  * `analysis.json` → the result view.
  *
- * The engine's schema is normative for content (§1.4) and richer than what any single UI
- * version models. We read the keys we know under both the ratified names and the engine's
- * alternates, and hand the whole object to the UI as `raw` so nothing committed is hidden.
+ * Two artifact shapes are read, because both exist in the wild:
+ *
+ *  - the **engine artifact** (`crp-engine`, normative for content, `docs/m3-integration-and-
+ *    spec-round.md` §1.4): `primary_estimate`, per-cohort valuations, balance, sensitivity,
+ *    identification, `excluded_records`, and a `reward_summary` that states outright when the
+ *    frozen rules compiled a null distribution;
+ *  - the **minimal seam artifact** (`primary_effect` + `reward_summary`), which is all the
+ *    ratified golden bundle carries.
+ *
+ * Whatever this version does not model is handed to the UI as `raw` so nothing committed is
+ * hidden. Numbers stay integer strings: no float ever touches a committed value.
  */
+function truthy(v: unknown): boolean | null {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    if (v === "true") return true;
+    if (v === "false") return false;
+  }
+  return null;
+}
+
+const EMPTY_RESULT: ResultView = {
+  present: false,
+  estimandStatement: null,
+  estimandUnitType: null,
+  improvementDirection: null,
+  scaleExponent: -6,
+  specVersion: null,
+  engineName: null,
+  engineVersion: null,
+  analysisContainerDigest: null,
+  primaryEffect: null,
+  evidenceEpochRoots: [],
+  rewardSummary: null,
+  cohorts: [],
+  excluded: [],
+  excludedRecords: { total: null, byReason: [] },
+  sensitivity: [],
+  balance: {
+    present: false,
+    passed: null,
+    thresholdMicro: null,
+    maxAbsSmdMicro: null,
+    treatedShareMicro: null,
+    gatesPayout: null,
+    covariates: [],
+  },
+  identification: {
+    present: false,
+    perCohortMode: null,
+    supportsStrongCausalClaim: null,
+    assumptions: [],
+    caveat: null,
+  },
+  raw: null,
+};
+
 export function parseAnalysis(raw: Record<string, unknown> | null): ResultView {
-  if (!raw) {
-    return {
-      present: false,
-      estimand: null,
-      specVersion: null,
-      engineName: null,
-      analysisContainerDigest: null,
-      resultArtifactHashHex: null,
-      primaryEffect: null,
-      evidenceEpochRoots: [],
-      rewardSummary: null,
-      cohorts: [],
-      excluded: [],
-      sensitivity: [],
-      raw: null,
+  if (!raw) return EMPTY_RESULT;
+
+  const engine = obj(raw["engine"]);
+  const estimandObj = obj(raw["estimand"]);
+  const estimandStr = typeof raw["estimand"] === "string" ? (raw["estimand"] as string) : null;
+  const scaleRaw = str(estimandObj["effect_scale"], "-6");
+  const scaleExponent = /^-?\d+$/.test(scaleRaw) ? Number(scaleRaw) : -6;
+
+  // -- primary effect: engine `primary_estimate`, or the minimal `primary_effect` ----------
+  const pe = obj(raw["primary_estimate"]);
+  const minimal = obj(raw["primary_effect"]);
+  let primaryEffect: PrimaryEffect | null = null;
+  if ("effect_s" in pe) {
+    primaryEffect = {
+      effectS: str(pe["effect_s"]),
+      standardErrorS: str(pe["standard_error_s"]),
+      improvementS: strOrNull(pe["improvement_s"]),
+      marginS: strOrNull(pe["margin_s"]),
+      conservativeS: str(pe["conservative_improvement_s"], "0"),
+      scaleExponent,
+      nUnits: strOrNull(pe["n_units"]),
+      nClusters: strOrNull(pe["n_clusters"]),
+      clusterRobustDf: strOrNull(pe["cluster_robust_df"]),
+      seMethod: strOrNull(pe["se_method"]),
+    };
+  } else if ("point_estimate_micro" in minimal) {
+    primaryEffect = {
+      effectS: str(minimal["point_estimate_micro"]),
+      standardErrorS: str(minimal["standard_error_micro"]),
+      improvementS: null,
+      marginS: null,
+      conservativeS: str(minimal["conservative_effect_micro"], "0"),
+      scaleExponent: -6,
+      nUnits: null,
+      nClusters: null,
+      clusterRobustDf: null,
+      seMethod: null,
     };
   }
-  const engine = obj(raw["engine"]);
-  const pe = obj(raw["primary_effect"] ?? raw["primary_estimate"]);
-  const rs = obj(raw["reward_summary"]);
 
+  // -- per-cohort rows --------------------------------------------------------------------
   const cohorts: CohortResultRow[] = [];
   const excluded: CohortResultRow[] = [];
   const cohortSrc = Array.isArray(raw["cohorts"])
@@ -267,68 +346,146 @@ export function parseAnalysis(raw: Record<string, unknown> | null): ResultView {
     : Array.isArray(raw["per_cohort"])
       ? (raw["per_cohort"] as unknown[])
       : [];
+  if (cohortSrc.length > 0) {
+    assertCohortLevelColumns("analysis.json cohort rows", Object.keys(obj(cohortSrc[0])));
+  }
   for (const c of cohortSrc) {
     const o = obj(c);
+    const reasons = strArray(o["exclusion_reasons"]);
+    const single = strOrNull(o["exclusion_reason"] ?? o["excluded_reason"]);
+    if (single && !reasons.includes(single)) reasons.push(single);
     const row: CohortResultRow = {
       cohortId: str(o["cohort_id"]),
-      arm: strOrNull(o["arm"]),
-      pointEstimateMicro: strOrNull(o["point_estimate_micro"]),
-      standardErrorMicro: strOrNull(o["standard_error_micro"]),
-      conservativeEffectMicro: strOrNull(o["conservative_effect_micro"]),
-      eligible: typeof o["eligible"] === "boolean" ? (o["eligible"] as boolean) : null,
-      exclusionReason: strOrNull(o["exclusion_reason"] ?? o["excluded_reason"]),
-      observations: strOrNull(o["observations"] ?? o["n_observations"]),
+      effectS: strOrNull(o["effect_s"] ?? o["point_estimate_micro"]),
+      standardErrorS: strOrNull(o["standard_error_s"] ?? o["standard_error_micro"]),
+      improvementS: strOrNull(o["improvement_s"]),
+      marginS: strOrNull(o["margin_s"]),
+      conservativeS: strOrNull(o["conservative_effect_s"] ?? o["conservative_effect_micro"]),
+      allocationBaseUnits: strOrNull(o["allocation_base_units"]),
+      identified: truthy(o["identified"] ?? o["eligible"]),
+      identificationMode: strOrNull(o["identification_mode"]),
+      meetsMinimumSample: truthy(o["meets_minimum_sample"]),
+      exclusionReasons: reasons,
+      nObservations: strOrNull(o["n_observations"] ?? o["observations"]),
+      nTimeBlocks: strOrNull(o["n_time_blocks"]),
+      nTreatedBlocks: strOrNull(o["n_treated_blocks"]),
+      nControlBlocks: strOrNull(o["n_control_blocks"]),
+      note: strOrNull(o["note"]),
     };
-    if (row.eligible === false || row.exclusionReason) excluded.push(row);
+    const barred =
+      reasons.length > 0 || row.identified === false || row.meetsMinimumSample === false;
+    if (barred) excluded.push(row);
     else cohorts.push(row);
   }
-  assertCohortLevelColumns(
-    "analysis.json cohort rows",
-    cohortSrc.length ? Object.keys(obj(cohortSrc[0])) : [],
-  );
 
+  // -- sensitivity ------------------------------------------------------------------------
   const sensitivity: SensitivityRow[] = [];
   const sensSrc = raw["sensitivity"] ?? raw["sensitivity_analyses"];
   if (Array.isArray(sensSrc)) {
     for (const s of sensSrc) {
-      if (typeof s === "string") sensitivity.push({ name: s, detail: "" });
-      else {
+      if (typeof s === "string") {
+        sensitivity.push({ name: s, kind: null, status: null, note: "", values: {} });
+      } else {
         const o = obj(s);
         sensitivity.push({
           name: str(o["name"] ?? o["analysis"]),
-          detail: str(o["summary"] ?? o["detail"] ?? JSON.stringify(o)),
+          kind: strOrNull(o["kind"]),
+          status: strOrNull(o["status"]),
+          note: str(o["note"] ?? o["summary"] ?? o["detail"]),
+          values: strRecord(o["values"]),
         });
       }
     }
   } else if (sensSrc && typeof sensSrc === "object") {
     for (const [k, v] of Object.entries(obj(sensSrc))) {
-      sensitivity.push({ name: k, detail: typeof v === "string" ? v : JSON.stringify(v) });
+      sensitivity.push({
+        name: k,
+        kind: null,
+        status: null,
+        note: typeof v === "string" ? v : JSON.stringify(v),
+        values: {},
+      });
     }
   }
 
-  const hasEffect = "point_estimate_micro" in pe;
+  // -- balance / identification / exclusions ----------------------------------------------
+  const bal = obj(raw["balance"]);
+  const balance: BalanceReport = {
+    present: Object.keys(bal).length > 0,
+    passed: truthy(bal["passed"]),
+    thresholdMicro: strOrNull(bal["threshold_micro"]),
+    maxAbsSmdMicro: strOrNull(bal["max_abs_smd_micro"]),
+    treatedShareMicro: strOrNull(bal["treated_share_micro"]),
+    gatesPayout: truthy(bal["gates_payout"]),
+    covariates: (Array.isArray(bal["covariates"]) ? (bal["covariates"] as unknown[]) : []).map(
+      (c) => {
+        const o = obj(c);
+        return {
+          name: str(o["name"]),
+          smdMicro: str(o["smd_micro"]),
+          passed: truthy(o["passed"]),
+        };
+      },
+    ),
+  };
+
+  const ident = obj(raw["identification"]);
+  const identification: IdentificationReport = {
+    present: Object.keys(ident).length > 0,
+    perCohortMode: strOrNull(ident["per_cohort_mode"]),
+    supportsStrongCausalClaim: truthy(ident["supports_strong_causal_claim"]),
+    assumptions: strArray(ident["assumptions"]),
+    caveat: strOrNull(ident["caveat"]),
+  };
+
+  const exRec = obj(raw["excluded_records"]);
+  const excludedRecords: ExcludedRecords = {
+    total: strOrNull(exRec["total"]),
+    byReason: (Array.isArray(exRec["by_reason"]) ? (exRec["by_reason"] as unknown[]) : []).map(
+      (r) => {
+        const o = obj(r);
+        return { reason: str(o["reason"]), count: str(o["count"]) };
+      },
+    ),
+  };
+
+  // -- reward summary ---------------------------------------------------------------------
+  const rs = obj(raw["reward_summary"]);
+  const rewardSummary: RewardSummaryView | null =
+    Object.keys(rs).length > 0
+      ? {
+          rewardRootHex: strOrNull(rs["reward_root_hex"]),
+          budgetBaseUnits: strOrNull(rs["budget_base_units"]),
+          totalLeafBaseUnits: strOrNull(rs["total_leaf_base_units"] ?? rs["total_base_units"]),
+          recoverableBaseUnits: strOrNull(rs["recoverable_base_units"]),
+          leafCount: strOrNull(rs["leaf_count"]),
+          nEligibleCohorts: strOrNull(rs["n_eligible_cohorts"]),
+          scaledToBudget: truthy(rs["scaled_to_budget"]),
+          droppedZeroSumRecipients: strOrNull(rs["dropped_zero_sum_recipients"]),
+          nullDistribution: truthy(rs["null_distribution"]) === true,
+          nullReasons: strArray(rs["null_reasons"]),
+        }
+      : null;
+
   return {
     present: true,
-    estimand: strOrNull(raw["estimand"]),
+    estimandStatement: strOrNull(estimandObj["statement"]) ?? estimandStr,
+    estimandUnitType: strOrNull(estimandObj["unit_type"]),
+    improvementDirection: strOrNull(estimandObj["improvement_direction"]),
+    scaleExponent,
     specVersion: strOrNull(raw["spec_version"]),
     engineName: strOrNull(engine["name"]),
+    engineVersion: strOrNull(engine["version"]),
     analysisContainerDigest: strOrNull(engine["analysis_container_digest"]),
-    resultArtifactHashHex: null, // reproduced by the verifier, never asserted here
-    primaryEffect: hasEffect
-      ? {
-          pointEstimateMicro: str(pe["point_estimate_micro"]),
-          standardErrorMicro: str(pe["standard_error_micro"]),
-          conservativeEffectMicro: str(pe["conservative_effect_micro"]),
-        }
-      : null,
+    primaryEffect,
     evidenceEpochRoots: strArray(raw["evidence_epoch_roots"]),
-    rewardSummary: {
-      rewardRootHex: strOrNull(rs["reward_root_hex"]),
-      totalBaseUnits: strOrNull(rs["total_base_units"]),
-    },
+    rewardSummary,
     cohorts,
     excluded,
+    excludedRecords,
     sensitivity,
+    balance,
+    identification,
     raw,
   };
 }
@@ -369,16 +526,32 @@ export async function parseEvidenceEpochs(
   for (const e of roots.evidenceEpochs) {
     const b = files.get(e.file);
     let leafCount: number | null = null;
+    let batches: EvidenceBatchView[] = [];
     if (b) {
       const t = await readLogicalTable(b);
       assertCohortLevelColumns(e.file, t.columns);
       leafCount = t.rows.length;
+      batches = t.rows.map((r) => ({
+        leafHashHex: r["leaf_hash_hex"] ?? "",
+        cohortId: r["cohort_id"] ?? null,
+        timeStart: r["time_start"] ?? null,
+        timeEnd: r["time_end"] ?? null,
+        signerSetRootHex: r["signer_set_root_hex"] ?? null,
+        signerCount: r["signer_count"] ?? null,
+        observationsRootHex: r["observations_root_hex"] ?? null,
+        observationLeafCount: r["observation_leaf_count"] ?? null,
+        acceptedCount: r["accepted_count"] ?? null,
+        rejectedCount: r["rejected_count"] ?? null,
+        distinctSigners: r["distinct_signers"] ?? null,
+        batchSignerPubkey: r["batch_signer_pubkey"] ?? null,
+      }));
     }
     out.push({
       epochIndex: e.epochIndex,
       rootHex: e.rootHex,
       file: e.file,
       leafCount,
+      batches,
       cohortId: null,
       timeStart: null,
       timeEnd: null,

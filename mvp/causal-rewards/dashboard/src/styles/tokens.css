@@ -1,0 +1,92 @@
+/*
+ * Design tokens — "cyanotype contact print".
+ *
+ * The visual thesis follows the protocol's core move: a pre-registration is a LATENT image.
+ * It is exposed (frozen) before anyone can see it, and only later developed (the seed is
+ * revealed, the result is published). So the palette is a blueprint/cyanotype one — Prussian
+ * ink on cool blue-grey paper — with exactly two accents: `--wax` for the seal that holds the
+ * pre-registration shut, and `--develop` for anything that has been opened and reproduced.
+ *
+ * Deliberately NOT: warm cream + high-contrast serif + terracotta; near-black + acid accent.
+ * The ground is cool because the subject is a photographic negative, not a manuscript.
+ *
+ * Rules for using these:
+ *  - `--null` is the token for a null / zero-payout result. It is neutral slate, never red.
+ *    A null result is a valid protocol output (invariant 8), so it must not read as an error.
+ *  - `--danger` exists only for genuine failures (a source that would not load).
+ *  - Never introduce a colour outside this file.
+ */
+
+:root {
+  /* ink & ground */
+  --ink: #0d2231;
+  --ink-soft: #46647a;
+  --ink-faint: #8199a9;
+  --paper: #e9eef1;
+  --paper-deep: #dbe3e8;
+  --surface: #fbfcfd;
+  --line: #c9d5dd;
+  --line-soft: #dfe7ec;
+
+  /* state */
+  --latent: #9db2c0; /* sealed, not yet revealed */
+  --wax: #8a4b1f; /* the frozen seal */
+  --wax-wash: #f3e7dd;
+  --develop: #1c6a5b; /* opened, reproduced, positive conservative bound */
+  --develop-wash: #e0eeea;
+  --null: #5d6b76; /* null result — valid, neutral, never an error */
+  --null-wash: #e6eaed;
+  --danger: #8a2020;
+  --danger-wash: #f6e6e6;
+
+  /* type */
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --step--2: 0.6875rem;
+  --step--1: 0.8125rem;
+  --step-0: 0.9375rem;
+  --step-1: 1.125rem;
+  --step-2: 1.5rem;
+  --step-3: 2.125rem;
+  --step-4: 3rem;
+
+  /* space (4px base, only these) */
+  --s1: 0.25rem;
+  --s2: 0.5rem;
+  --s3: 0.75rem;
+  --s4: 1rem;
+  --s5: 1.5rem;
+  --s6: 2rem;
+  --s7: 3rem;
+  --s8: 4.5rem;
+
+  --radius: 3px;
+  --radius-lg: 6px;
+  --shadow: 0 1px 0 rgb(13 34 49 / 6%), 0 8px 24px -18px rgb(13 34 49 / 45%);
+  --measure: 68ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #dfe9ef;
+    --ink-soft: #9fb6c4;
+    --ink-faint: #6d8697;
+    --paper: #0a1721;
+    --paper-deep: #06111a;
+    --surface: #0f2130;
+    --line: #23404f;
+    --line-soft: #1a3140;
+    --latent: #47657a;
+    --wax: #d29360;
+    --wax-wash: #2a1c11;
+    --develop: #59bda8;
+    --develop-wash: #0f2b27;
+    --null: #93a6b3;
+    --null-wash: #16262f;
+    --danger: #e59090;
+    --danger-wash: #2b1414;
+    --shadow: 0 1px 0 rgb(0 0 0 / 30%), 0 10px 28px -20px rgb(0 0 0 / 90%);
+  }
+}

@@ -143,6 +143,7 @@ export class RpcDataSource implements ProtocolDataSource {
           rootHex: hex(ep.observationsRoot),
           file: null,
           leafCount: null,
+          batches: [], // per-batch headers live in the bundle, never in an on-chain account
           cohortId: ep.cohortId ?? null,
           timeStart: big(ep.timeStart),
           timeEnd: big(ep.timeEnd),
