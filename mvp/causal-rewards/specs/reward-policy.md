@@ -6,6 +6,11 @@
 reward **leaf-set shape** to *aggregate-one-leaf-per-recipient* (see "Reward leaf-set shape" under
 Stage 2). No frozen manifest field, schema, or golden hash changes — the leaf-set shape is a
 compiler/settlement decision, not a manifest field. Tracks `serialization.md` 1.1.0.
+**2026-07-28 erratum + Appendix B (prose-only, still 1.1.0):** Appendix A carried a factually wrong
+description of how budget concentrates (see the ERRATUM box in Appendix A); the new NON-NORMATIVE
+Appendix B states the absolute-allocation property explicitly and records the open curve-calibration
+gap. **No normative text, schema, or golden changed:** manifest golden `74e0bb82…0f81b2`,
+`reward_curve_hash` `sha256:14b0ec34…856d41` and evidence golden `901b08d5…fa75b` are all intact.
 
 The reward policy is a **two-stage** allocation, fully frozen in the manifest at `Frozen`
 (`reward_policy` object) and therefore fixed before the seed is revealed and before any outcome is
@@ -294,27 +299,136 @@ applied **independently per cohort at a one-sided 5% level with no family-wise c
 `s2_null_effect` simulator scenario the compiler paid ≈29.6% of the budget to 2 of 60 cohorts under a
 **true zero effect** (`docs/multiplicity-study.md`).
 
-The architect recommendation for changing this (`specs/multiplicity-recommendation.md`) is summarized
-here for the reader; **none of it is in force until a v1.2 migration is signed off**
-(`specs/v1.2-migration-proposal.md` Item B3):
+**The prior architect recommendation (BH + a `["50000","0"]` floor) is WITHDRAWN-PENDING-DATA as of
+2026-07-28** (`specs/multiplicity-recommendation.md`): its structural premise was wrong (see the
+erratum below) and the remedy menu is being re-measured. Nothing was ever in force; the frozen
+default remains `none`. What survives of the framing:
 
 - **Two channels, two instruments.** A p-value threshold controls *how many* null cohorts clear the
-  test (the **discovery** channel) but **not** *how much budget* survivors absorb (the
-  **concentration** channel). Under a true null the fixed budget does not shrink — it **concentrates**
-  via `proportional_scale_to_budget`, so a single chance-winner still takes ~26% of `B` even after a
-  correction cuts the false-positive count 2 → 1.
-- **Recommended threshold: Benjamini–Hochberg FDR (α = 0.05)** over the candidate cohort family —
-  it bounds the *fraction of paid cohorts that are null* (the analogue of wasted spend) while
-  preserving far more power than Bonferroni/Šidák, whose `α/m ≈ 0.0008` cut would make "most cohorts
-  get zero" the default outcome (the #1 risk-register item). BH is deterministic ⇒ frozen-manifest
-  compatible.
-- **Recommended structural fix: a conservative-effect floor** — a curve breakpoint `["f_s","0"]`
-  below which `alloc_c = 0`, so a marginal survivor with a tiny conservative effect earns nothing and
-  cannot absorb a disproportionate share. This is the curve-side lever the threshold cannot provide;
-  a per-cohort budget cap (`max_cohort_share_micro`, new field) is an opt-in stronger bound, not the
-  recommended default.
+  test (the **discovery** channel) but **not** *how much budget* a survivor absorbs (the
+  **concentration** channel). A survivor's allocation is set by the frozen `reward_curve` alone
+  (Stage 1 step 5), so cutting the false-positive count 2 → 1 removed only the *smaller* winner's
+  allocation and left the larger one at ~26% of `B`.
 
-If adopted, `multiplicity_control` (with an FDR level) and the floor breakpoint become frozen manifest
-content — both hash-moving, both in the v1.2 proposal with computed goldens. Until then, the
+> **ERRATUM (2026-07-28, prose-only; no normative text changed).** An earlier revision of this
+> appendix attributed that ~26% to `proportional_scale_to_budget` "concentrating" the budget on the
+> survivors. **That is wrong and it is the opposite of what Stage 1 step 6 specifies.** Allocation in
+> this protocol is **absolute**: each cohort draws `alloc_c = reward_curve(conservative_c_s)`,
+> determined by *its own* conservative effect and nothing else. When `S = Σ_c alloc_c ≤ B` the
+> overflow rule does not execute at all and the unallocated `B − S` is recovered; `S` is never
+> normalized up to `B`. On the `s2_null_effect` run `S ≈ 0.2961 · B ≤ B`, so
+> `proportional_scale_to_budget` **never fired** — the 29.6% is simply the absolute sum the curve
+> produced, and the remaining 70.4% was recovered exactly as Invariant 8 requires. See Appendix B for
+> what the residual actually is. The same erratum applies to `specs/multiplicity-recommendation.md`
+> (corrected) and to the "Structural note" in `docs/multiplicity-study.md`, which is *generated* from
+> `causal-engine/src/crp_engine/studies.py` (`_STRUCTURAL_NOTE`, ~line 353, and the selection-layer
+> bullet at ~line 257) and must be corrected at that source, not in the generated file.
+- **Candidate discovery-channel instrument: Benjamini–Hochberg FDR.** Over the candidate cohort
+  family it bounds the *fraction of paid cohorts that are null* while preserving far more power than
+  Bonferroni/Šidák, whose `α/m ≈ 0.0008` cut would make "most cohorts get zero" the default outcome
+  (the #1 risk-register item). BH is deterministic ⇒ frozen-manifest compatible. **Not recommended
+  and not adopted** pending the four-way table.
+- **Candidate concentration-channel instruments.** Curve **recalibration** (no schema change at all),
+  a conservative-effect **floor** breakpoint `["f_s","0"]` (curve bytes only), or a per-cohort **cap**
+  `max_cohort_share_micro` (new frozen field). See Appendix B.3 for why the floor is expected to be
+  weak against a *null survivor* specifically, and `specs/multiplicity-recommendation.md` §2–§3 for
+  the measurements that must precede any choice.
+
+If any is adopted it becomes frozen manifest content — hash-moving, enumerated in the v1.2 proposal
+with computed goldens. Until then, the
 one-sided 5% independent test and the current `reward_curve` remain the sole frozen policy, and a
 null field of cohorts correctly returns budget (Invariant 8).
+
+## Appendix B — allocation is ABSOLUTE; curve calibration is an OPEN GAP (NON-NORMATIVE)
+
+**This appendix is NON-NORMATIVE. It adds no rule and changes no frozen behavior.** It states
+plainly a property Stage 1 already specifies, and records a genuine gap that Stage 1 does *not*
+cover, so that the gap is closed deliberately rather than by folklore.
+
+### B.1 The absolute-allocation property (descriptive restatement of Stage 1 steps 5–6)
+
+**Property P-ABS.** A cohort's allocation is an **absolute amount determined by its own conservative
+effect**, not a share of the budget:
+
+```
+alloc_c   = reward_curve(conservative_c_s)          # depends on cohort c only
+S         = Σ_c alloc_c
+budget_c  = alloc_c                if S ≤ B         # no interaction between cohorts
+budget_c  = ⌊alloc_c · B / S⌋      if S >  B        # single downward factor B/S < 1
+```
+
+Three consequences, all already implied by Stage 1 step 6 and restated here because they are exactly
+what the erratum above got wrong:
+
+1. **The overflow rule is downward-only and conditional.** `proportional_scale_to_budget` applies a
+   factor `min(1, B/S)`; in the `S ≤ B` branch that factor is 1 and the rule is a no-op. It can never
+   raise an allocation, never redistribute a dropped cohort's allocation to a surviving cohort, and
+   never move budget between cohorts at all — the factor is the *same scalar* for every cohort.
+2. **Deployment is an outcome, not a target.** `S/B` is whatever the curve produced. There is no
+   mechanism anywhere in the protocol that normalizes total payout up to `B`. A field of true-null
+   cohorts pays ~0 and returns ~all of `B` at `close_experiment` (Invariant 8).
+3. **Dropping a cohort strictly reduces total payout** (it cannot increase any other cohort's
+   allocation, and in the `S > B` branch it *raises* `B/S` toward 1, which can only move the
+   survivors closer to their own absolute ceilings — never past them).
+
+> **Naming defect (candidate v1.2 item).** The `overflow_policy` const is spelled
+> `proportional_scale_to_budget`, which reads as "scale the allocations *to* the budget", i.e.
+> normalize. Its specified behavior is "scale down proportionally **only if** the cap is exceeded".
+> The name is the single most likely cause of the wrong mental model and a rename is proposed in
+> `specs/v1.2-migration-proposal.md`. It is hash-moving (the const is a frozen manifest value).
+
+### B.2 The gap: nothing constrains the curve relative to `B` or to the cohort count
+
+`manifest.schema.json` requires the curve to be piecewise-linear, monotonic non-decreasing, and to
+map `0 → 0`. It imposes **no relationship at all** between the curve's outputs, `budget_base_units`,
+and `estimand.cohort_definition.cohort_count`. Concretely, in `examples/manifest.example.json`:
+
+| quantity | value | as a share of `B = 100e9` |
+| --- | --- | --- |
+| curve output at the first paying breakpoint (`conservative_s = 100000`) | `20e9` | **20% to ONE cohort** |
+| curve output at the last breakpoint (`conservative_s = 1000000`) | `120e9` | **120% to ONE cohort** |
+| equal share if 60 cohorts were paid | `1.67e9` | 1.67% |
+
+So the example curve is calibrated as if a handful of cohorts were expected to pay; a *single*
+saturated cohort exceeds the entire budget. Under a sparse-payer outcome the protocol has **no
+concentration bound whatsoever**: the only backstop, `proportional_scale_to_budget`, engages only in
+the `S > B` branch — precisely the *dense*-payer case. This is the true source of the reported
+concentration residual, and it is a **curve-calibration** property of a particular manifest, not a
+defect in Stage 1's arithmetic.
+
+### B.3 One knob, two targets
+
+Curve height simultaneously sets **aggregate deployment** (`S/B`, which scales with the number of
+paying cohorts × height) and **per-cohort concentration** (`max_c budget_c / B`, which depends on
+height alone). Lowering the curve to suppress concentration lowers deployment by the same factor, and
+the number of paying cohorts is not knowable at freeze time. A remedy that only reshapes the curve
+therefore trades one failure mode for the other. Levers differ in whether they *decouple* the two:
+
+| Lever | Bounds concentration? | Cost to deployment when many cohorts genuinely pay | New frozen field? |
+| --- | --- | --- | --- |
+| lower the whole curve | yes, proportionally | proportional loss — does **not** decouple | no (curve bytes only) |
+| conservative-effect floor `["f_s","0"]` | only for cohorts *below* `f_s` | none above `f_s` | no (curve bytes only) |
+| per-cohort cap `max_cohort_share_micro` | yes, directly and unconditionally | none — binds only when few cohorts pay | **yes** |
+| multiplicity threshold (BH/FWER) | **no** (discovery channel only) | power loss | yes (`multiplicity_control`) |
+
+**A floor is weak against a null survivor by construction.** A cohort that clears the one-sided test
+under a true null does so *because* its conservative bound came out large; a floor placed below the
+curve's first paying breakpoint therefore removes the small marginal winners and leaves the large one
+untouched. Derived from the published `s2_null_effect` figures (`docs/multiplicity-study.md`) and the
+example curve, the two paid cohorts sit at `conservative_s ≈ 139600` (25.94% of `B`) and
+`conservative_s ≈ 18350` (3.67% of `B`); a floor at `f_s = 50000` removes only the second — the same
+cohort every multiplicity correction already removes — so **floor-at-50000 and BH are redundant with
+each other at those parameter values**, and BH+floor lands on the same 25.94% as either alone. These
+two `conservative_s` values are *derived from the reported allocation percentages*, not read from the
+engine; `causal-inference-engineer` should confirm them against the actual valuations before any
+floor value is chosen. If confirmed, a floor that bites on `s2` must exceed `~139600`, i.e. sit
+*above* the curve's first paying breakpoint, which is a materially more aggressive change than the
+`["50000","0"]` currently sketched.
+
+### B.4 What is open
+
+Open question **Q-CURVE-1**: should the spec constrain curve calibration (e.g. require
+`y_last ≤ budget_base_units`, or require a declared `expected_paying_cohorts` against which the curve
+is sanity-checked at freeze), add a per-cohort cap, or leave calibration entirely to the manifest
+author with only a verifier *warning*? Candidates, exact schema deltas, and computed hash costs are
+in `specs/v1.2-migration-proposal.md`. **Nothing is adopted; the frozen policy is unchanged.**

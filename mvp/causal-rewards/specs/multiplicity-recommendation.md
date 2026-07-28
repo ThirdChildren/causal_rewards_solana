@@ -1,113 +1,158 @@
 # Multiplicity & concentration control — architect recommendation
 
-**Status:** RECOMMENDATION (not yet normative). **The frozen default is UNCHANGED: `none`**
-(independent one-sided 5% test per cohort, `reward-policy.md` Stage 1). Adopting this recommendation
-as the default is a hash-moving **v1.2 migration** (`specs/v1.2-migration-proposal.md` Item B3) and
-requires USER sign-off. Written against the deterministic data in `docs/multiplicity-study.md`
-(six scenarios × four regimes).
+**Status: WITHDRAWN-PENDING-DATA (2026-07-28). NOT a recommendation of record.**
+**The frozen default is UNCHANGED: `none`** (independent one-sided 5% test per cohort,
+`reward-policy.md` Stage 1). Nothing here is normative and nothing here is ratified.
 
-## The question, framed correctly
+This document was previously issued as a recommendation (BH + a `["50000","0"]` conservative-effect
+floor). It is **withdrawn** pending two things:
 
-The issue is **not** `{none vs Bonferroni}`. Bonferroni (and Šidák) over `m ≈ 30–60` candidate
-cohorts drive the per-cohort cut to `α/m ≈ 0.0008`. In the study that collapses power on the
-genuine-but-weak scenarios — turning *"most cohorts receive zero/uncertain value"* (our #1
-risk-register item) into the **default** outcome. On `s1_strong_signal` FWER pays 2 of 19 payable
-true positives (10.5% power) vs BH's 6 (31.6%); on `s5_sybil_contamination` FWER pays 3 of 16 (18.8%)
-vs BH's 6 (37.5%). Buying a marginal false-positive reduction at that power cost is the wrong trade
-for a budget-allocation problem.
+1. a correction to its structural premise, which was **wrong** (§1 below), and
+2. the four-way regime comparison + floor sweep + per-cohort-cap numbers currently being produced by
+   `causal-inference-engineer` (no-correction / BH / BH+floor / floor-only / cap). Until those exist
+   there is no defensible parameter choice, only a menu.
 
-There are **two distinct channels**, and they need **two distinct instruments**:
+The sections below are structured so the new numbers slot straight in. Every results table is marked
+**[PENDING]** and MUST NOT be cited until filled.
 
-1. **Discovery channel** — *how many* null cohorts clear the test. A p-value threshold controls this.
-2. **Concentration channel** — *how much budget* the survivors absorb. A p-value threshold does
-   **not** control this. This is the structural point below.
+---
 
-## Recommendation 1 (threshold): Benjamini–Hochberg FDR at α = 0.05
+## 1. Correction of the structural premise (this is why the doc was withdrawn)
 
-Adopt **Benjamini–Hochberg (1995) FDR** as the discovery threshold, not an FWER method.
+The withdrawn version stated:
 
-- **Why FDR, not FWER.** We allocate a *budget across many cohorts* and care about the *proportion of
-  spend that is wasted*. FDR controls the expected **proportion of paid cohorts that are false** —
-  the closest statistical analogue to wasted spend — whereas FWER controls the probability of *any*
-  false positive, an unnecessarily strict target that adapts to the *number of tests* rather than the
-  *number of true signals present*. In the study BH keeps materially more power than FWER on the
-  clear-signal scenarios (`s1`, `s5`) while suppressing pure-null discoveries as hard as FWER does
-  on `s2` (all three cut the false-positive **count** 2 → 1).
-- **Frozen-manifest compatible.** BH is deterministic given the frozen p-values and the candidate
-  family `m` (eligible + identified + causal-design cohorts, fixed by the frozen plan). It reads
-  `α` from a frozen field and reproduces bit-for-bit (Invariant 2). No analyst degree of freedom is
-  introduced.
-- **Where it sits.** Selection runs **before** the reward curve: a cohort BH drops is forced
-  `conservative_c_s = 0`, exactly like failing minimum sample (`reward-policy.md` Stage 1 step 4).
-  The frozen curve + overflow then re-allocate across survivors.
+> "`proportional_scale_to_budget` divides the *whole* budget across whichever cohorts clear the test,
+> so two chance winners split the entire pool, not `2/60` of it."
 
-## The structural point: a threshold mitigates, it does NOT remove, concentration
+**That is wrong.** Allocation in this protocol is **absolute**, not a share of the budget
+(`reward-policy.md` Stage 1 steps 5–6, and the new Appendix B "Property P-ABS"):
 
-Under a true null (`s2_null_effect`) the fixed budget does **not** shrink with the number of false
-positives — it **concentrates**. `proportional_scale_to_budget` divides the *whole* budget across
-whichever cohorts clear the test, so two chance winners split the entire pool, not `2/60` of it.
+```
+alloc_c = reward_curve(conservative_c_s)        # a function of cohort c ALONE
+S       = Σ_c alloc_c
+S ≤ B  ⇒ budget_c = alloc_c                     # overflow rule is a NO-OP; B − S is recovered
+S > B  ⇒ budget_c = ⌊alloc_c · B / S⌋           # single downward factor, applied to everyone equally
+```
 
-The study makes the residual explicit and measurable: on `s2`, **BH, Bonferroni and Šidák all cut
-the false-positive count 2 → 1, yet the single survivor still absorbs ~26% of the budget** (vs ~30%
-under `none`). A p-value threshold bounds the **fraction of PAID cohorts that are null**; it does
-**NOT** bound the **fraction of BUDGET** those few nulls receive, because concentration is a
-spend-allocation property of the reward *curve + overflow rule*, not of the test. So no threshold
-choice — including FDR — closes the waste channel on its own.
+On `s2_null_effect` the engine reported **deployed 29.61% / recovered 70.39%**, i.e. `S ≈ 0.2961·B ≤ B`
+— so `proportional_scale_to_budget` **never executed**. (The same published table shows the other
+branch does exist: `s4_interference` under `none` deploys 100.00%, which is the `S > B` cap firing.)
+Dropping a cohort cannot hand its allocation to a survivor; there is no redistribution mechanism in
+the protocol at all.
 
-## Recommendation 2 (structural): YES, the reward curve must carry part of the fix
+**The specification and the implementation agree on this.** `causal-engine/src/crp_engine/reward_compiler.py`
+implements exactly the branch above. There is **no normalization bug**. The wrong narrative existed
+only in non-normative prose (this document, `reward-policy.md` Appendix A, and the generated
+"Structural note" in `docs/multiplicity-study.md`).
 
-**Ruling: the fix cannot live entirely in the p-value threshold; the reward curve must carry the
-concentration channel.** I recommend a **conservative-effect floor** as the primary curve-side lever,
-with a per-cohort cap as an optional stronger bound.
+**What the residual actually is.** A single cohort took 25.94% of `B` because the frozen example
+`reward_curve` *pays* one cohort that much: its first paying breakpoint is worth 20% of `B` to a
+single cohort and its last is worth 120% of `B` to a single cohort, with no constraint anywhere tying
+curve outputs to `B` or to `cohort_count` (`reward-policy.md` Appendix B.2). This is **curve
+calibration**, and it is a per-experiment manifest parameter — not a protocol-level allocation defect.
 
-- **Primary — conservative-effect floor (RECOMMENDED default).** A floor `f_s` on
-  `conservative_c_s` below which **no budget deploys**: `alloc_c = 0` for `conservative_c_s < f_s`.
-  This directly attacks the concentration channel at its source — a marginal chance-winner that
-  clears BH with a *tiny* conservative effect earns **nothing**, so it can never be handed a
-  disproportionate share when few cohorts are paid. **No new schema field is required:** the floor is
-  expressed as an extra reward-curve breakpoint `["f_s", "0"]` (below `f_s` the piecewise-linear
-  curve evaluates to 0). It is hash-moving only through `reward_curve` bytes
-  (`specs/v1.2-migration-proposal.md` Item B3).
-  - *Tradeoff:* the floor costs power on genuinely small-but-real effects. In the studied scenarios
-    this cost is near-zero: `s3_low_power` (effect 0.03) and `s6_demand_shift` (effect 0.05) already
-    pay 0 under every regime because the conservative bound swamps them, so a floor set within the
-    curve's first paying segment removes essentially no real power while suppressing marginal
-    null-driven winners. The floor value is itself a frozen pre-analysis choice (Invariant 1).
+**Consequence for the remedy menu.** The two channels framing survives, but the instruments change:
 
-- **Optional — per-cohort budget cap (stronger, needs a new field).** A frozen
-  `max_cohort_share_micro` cap on any single cohort's `budget_c` (as a micro fraction of `B`) bounds
-  concentration *directly* regardless of effect size. It is a hard concentration bound but a blunter
-  instrument: it also caps *legitimate* large effects, so it trades away some fidelity of the
-  additionality signal. It requires a new `reward_policy.max_cohort_share_micro` field (a further
-  hash-moving change). **Recommended as opt-in, not the default** — the floor addresses the
-  null-concentration failure mode with less collateral cost.
+| Channel | What it is | Instrument that actually moves it |
+| --- | --- | --- |
+| Discovery | how many null cohorts clear the test | multiplicity threshold (BH / Bonferroni / Šidák) |
+| Concentration | how much `B` one survivor absorbs | **curve calibration**: overall height, a floor, or a per-cohort cap |
 
-- **Not recommended: curve concavity as the concentration fix.** Global concavity would compress the
-  spread between strong and weak cohorts everywhere, weakening the additionality signal the protocol
-  exists to express. The floor is a targeted alternative that leaves the paying region's shape intact.
+A multiplicity threshold does not touch concentration — that part of the withdrawn doc was right, for
+the wrong reason.
 
-## Bottom line (recommended package)
+---
 
-**Benjamini–Hochberg FDR (α = 0.05) for the discovery threshold + a conservative-effect floor
-(a `["f_s","0"]` curve breakpoint) for the concentration channel.** BH bounds the fraction of paid
-cohorts that are null while preserving far more power than FWER (the #1 risk item); the floor bounds
-what a marginal survivor can absorb, closing the ~26% single-null residual that no threshold can
-touch. Both are deterministic and frozen-manifest compatible. Both are hash-moving and are folded
-into `specs/v1.2-migration-proposal.md` Item B3 with computed goldens (floored `reward_curve_hash`
-`sha256:0123783e…`; full v1.2 manifest `98490aa3…`). **The default remains `none` until the user
-signs off** on the v1.2 migration.
+## 2. Why a floor at `["50000","0"]` is probably the wrong lever [PENDING confirmation]
 
-## Data reference
+A cohort that clears a one-sided test under a true null clears it *because* its conservative bound
+came out large. A floor placed **below** the curve's first paying breakpoint therefore deletes the
+small marginal winners — the same ones a multiplicity correction already deletes — and leaves the
+large one untouched.
 
-Regenerate the study deterministically: `python -m crp_engine.studies` (see
-`docs/multiplicity-study.md`). The `s2_null_effect` headline the recommendation turns on:
+Derived from the published `s2_null_effect` allocations against the example curve (`reward-policy.md`
+Appendix B.3; **`causal-inference-engineer` to confirm against actual valuations**):
 
-| regime | cohorts paid | waste (share of budget) | budget recovered |
-| --- | --- | --- | --- |
-| none | 2 | 29.61% | 70.39% |
-| bonferroni | 1 | 25.94% | 74.06% |
-| sidak | 1 | 25.94% | 74.06% |
-| benjamini_hochberg | 1 | 25.94% | 74.06% |
+| paid cohort | derived `conservative_s` | allocation | share of `B` | removed by `f_s = 50000`? |
+| --- | --- | --- | --- | --- |
+| #1 | ≈ 139600 | 25.94e9 | 25.94% | **no** |
+| #2 | ≈ 18350 | 3.67e9 | 3.67% | yes |
 
-The count drops 2 → 1 under every correction; the spend drops only 29.6% → 25.9% — the concentration
-residual the curve-side floor exists to close.
+If confirmed, `floor-only(50000)`, `BH-only` and `BH+floor(50000)` all land on **the same 25.94%**,
+i.e. the two recommended levers are **redundant with each other** at the proposed parameter values.
+A floor that bites on `s2` must exceed ~139600 — *above* the first paying breakpoint — which is a much
+more aggressive change than was represented. This is exactly why the floor sweep is required before
+any recommendation.
+
+---
+
+## 3. Results [PENDING — `causal-inference-engineer`]
+
+### 3.1 Four-way regime comparison (six scenarios) [PENDING]
+
+Replaces the withdrawn table. Required columns per cell: `m`, `paid`, `waste (%B→null)`,
+`power (%payable-TP paid)`, `deployed (%B)`, `recovered (%B)`, **`max single-cohort share (%B)`**
+(new — this is the concentration metric the old study never reported and without which the
+concentration channel cannot be evaluated), and **`scaled_to_budget` (did the `S > B` branch fire?)**
+(new — so no reader can ever again mistake the `S ≤ B` case for normalization).
+
+> _table pending_
+
+### 3.2 Floor sweep [PENDING]
+
+Required: for `f_s` across a grid spanning below, at, and above the first paying breakpoint
+(`100000`), report on `s2_null_effect` the `max single-cohort share` and `waste`, and on
+`s1_strong_signal` / `s5_sybil_contamination` the power and deployment given up.
+
+> _table pending_
+
+### 3.3 Per-cohort cap sweep [PENDING]
+
+Required: `max_cohort_share_micro` across a grid, same two-sided read (concentration bought vs.
+legitimate large-effect payout given up on `s1`/`s5`).
+
+> _table pending_
+
+### 3.4 Curve-recalibration reference arm [PENDING — requested]
+
+Not previously studied and it must be, because it is the **only** candidate that needs **no schema
+change at all**: re-run the benchmark with a `reward_curve` whose outputs are calibrated to the
+scenario's `cohort_count` (e.g. `y_last ≤ B`) and report the same columns. If recalibration alone
+brings `max single-cohort share` to an acceptable level, the whole v1.2 multiplicity item may be
+unnecessary. Note the expected tradeoff (`reward-policy.md` Appendix B.3): lowering curve height
+suppresses concentration and deployment by the *same* factor, so this arm is expected to trade
+under-deployment on `s1`/`s5` for lower `s2` concentration. Quantifying that trade is the point.
+
+> _table pending_
+
+---
+
+## 4. Recommendation [PENDING — deliberately not written]
+
+**No recommendation is issued in this revision.** It will be written against §3 once the tables
+exist, and it must answer, in order:
+
+1. Does the **curve-recalibration** arm (no schema change, no new frozen field, no v1.2 dependency)
+   close the concentration channel acceptably? If yes, prefer it — it is strictly the cheapest.
+2. If not, is the residual concentration worth a **new frozen field**
+   (`reward_policy.max_cohort_share_micro`), which is the only lever that bounds concentration
+   *without* costing deployment when many cohorts genuinely pay?
+3. Is a **discovery** correction (BH) worth adopting *on its own merits* — i.e. justified by the
+   power/waste table across all six scenarios, and **not** as a fix for concentration, which it
+   provably is not?
+4. Is a **floor** worth anything once (1)–(3) are decided, given §2?
+
+Each answer carries an explicit hash cost, enumerated in `specs/v1.2-migration-proposal.md`.
+
+**Honest baseline for that decision, stated up front:** the only concentration improvement any
+threshold regime has demonstrated so far is **29.6% → 25.9% of budget wasted under a true null**.
+That is a **thin** return, and `reward_curve_hash` is a frozen, golden-bearing commitment. Moving it
+must be justified by better numbers than that.
+
+## 5. Data reference
+
+Regenerate deterministically: `python -m crp_engine.studies` (see `docs/multiplicity-study.md`).
+Note that the generated "Structural note" section of that document still carries the withdrawn,
+incorrect premise from §1; it is emitted by `causal-engine/src/crp_engine/studies.py`
+(`_STRUCTURAL_NOTE`, ~line 353; selection-layer bullet, ~line 257) and must be corrected **at that
+source**, not by editing the generated markdown.

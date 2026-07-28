@@ -23,11 +23,27 @@ never silently diverge.
   algorithm (numbers-as-strings, CJSON, SHA-256, Merkle, seed commit/reveal) an independent
   implementation reproduces exactly.
 
+## Not ratified (proposals and open items — NOTHING here is in force)
+
+- `v1.2-migration-proposal.md` — DRAFT. The **single** v1.2 package: S1 missingness (ready),
+  S2 concentration/multiplicity remedy (**slot, content TBD**), S3 clarifications; plus the
+  independent participant-leaf pin. Carries the exact computed golden cost of every candidate.
+- `multiplicity-recommendation.md` — **WITHDRAWN-PENDING-DATA (2026-07-28)**. Its structural premise
+  was wrong (it described allocation as a share of budget; allocation is absolute). Restructured to
+  receive `causal-inference-engineer`'s four-way + floor-sweep + cap numbers. Do not cite its tables.
+- `reward-policy.md` Appendix B — **Q-CURVE-1**: nothing constrains `reward_curve` outputs relative
+  to `budget_base_units` or `cohort_count`. Open; candidates in the v1.2 proposal (S3/C3).
+- `serialization.md` §6.5.2 — the epoch sub-root → singular on-chain field `combine()` mapping is
+  spec-RESOLVED but **awaits `solana-program-engineer` confirmation** that evidence-registry/SDK post
+  `combine(R)`/`combine(Q)` for `n ≥ 2`. Unconfirmed; not resolved unilaterally.
+- `serialization.md` §6.2 — participant leaf/sort still stamped `PROVISIONAL-UNPINNED-6.2`.
+
 **Status:** M1 frozen-READY. All serialization open items are ratified; `manifest.golden.md` carries
 final (non-provisional) golden hashes; the four M1 design questions (student_t df, weight-formula
 grammar, switchback carryover/washout, interference assumption) are resolved in-spec. Remaining step
 is the orchestrator's freeze gate. Frozen spec is the M1 acceptance artifact and a hard dependency
-for M2/M3.
+for M2/M3. **Frozen goldens (unchanged, re-verified 2026-07-28):** manifest
+`74e0bb82…0f81b2`, `reward_curve_hash` `sha256:14b0ec34…856d41`, evidence `901b08d5…fa75b`.
 
 ## License
 
