@@ -428,6 +428,70 @@ EXPLICITLY NOT DONE YET
   4 programs need ~9-17 SOL. User funds it, then scripts/deploy-devnet.sh (devnet-guarded) + 18/18.
 
 ================================================================================
+SESSION 2026-07-30 — v1.2 RATIFIED (cap-only), COMPENSATION STUDY, #14, DEVNET PEAK
+================================================================================
+USER RATIFIED v1.2 (task #7 DONE) with 3 conditions. Decision:
+  - v1.2 = frozen missingness_policy ONLY. Multiplicity default stays `none` (disclosed).
+  - Reading B for the curve: the shipped example curve is UNCHANGED (reward_curve_hash
+    14b0ec34…). Only missingness moved the MANIFEST golden 74e0bb82 -> ba632e8a3594…
+  - Recommended default = shipped curve scale + per-cohort 10%B SATURATION CAP (curve
+    saturation, no new frozen field; tunable per experiment; guidance, not enforced).
+
+CONDITION 1 — compensation study (causal-eng, commit 4137d7a, docs/compensation-study.md):
+  RECALIBRATION REJECTED. The prior ×1/12 recalibration under-deploys — pays s1 strong-
+  signal true positives only 6.15%B and RECOVERS 93.85% of budget (spends badly by
+  spending little). It's a pure value_scale/exposure change (ppute identical, scaled down);
+  head-count power hid it. The 10%B cap is the only real TARGETING gain (waste/legit ratio
+  0.402 -> 0.245 at 10%B, the frontier optimum; tighter caps clip true positives). So
+  Condition 2's "calibration + cap" collapsed to CAP-ONLY. cap_base_units = 10,000,000,000
+  on the example (B=100e9, N=60). 190 engine tests green; reward goldens a9c35cf4/ea943182/
+  b882c899 + reward_curve_hash 14b0ec34 all reproduce.
+
+CONDITION 2/3 + normative ruling (architect, commits 50d29fd, 0001746, 919e4a6, 86ba2a9):
+  - §4 multiplicity-recommendation.md: cap-only default, recalibration explicitly rejected.
+  - Benchmark fixture DECOUPLED from spec example: causal-engine/fixtures/benchmark-manifest.json
+    (reward_curve_hash eeab732ec6ff…, shipped scale + 10%B cap). The M4 benchmark publishes
+    numbers from THIS fixture, NOT manifest.example.json. Mandatory provenance line recorded in
+    benchmark-plan.md §7 + benchmark-report.md. manifest.example.json's curve stays 14b0ec34.
+  - NORMATIVE RULING (plain language, 3 places): threat-model.md §4, docs/integration-guide.md,
+    docs/benchmark-report.md Limitations — chain enforces curve SHAPE deterministically but
+    guarantees NEITHER a concentration bound NOR a waste bound; cannot certify targeting without
+    assuming the truth it's forbidden to assume (Inv 6); integrators must supply own controls.
+  - Missingness migration: collapsed single-field form design.parameters.missingness_policy
+    ∈ {ineligible, impute_cohort_mean}; spec_version+manifest_version -> 1.2.0. New manifest
+    golden ba632e8a INDEPENDENTLY re-verified by orchestrator via canonical.py (CJSON 3886).
+    Architect flagged: bumped BOTH versions; spec_version-only variant would be b6702e9c
+    (rejected as inconsistent, one-line revert if preferred).
+
+#14 CLAUDE.md (orchestrator, commit 6b8b094): the phantom `value_scale` field was NOT in
+  CLAUDE.md — it was in .claude/agents/causal-inference-engineer.md:35. Fixed BOTH governance
+  files to alloc_c = reward_curve(conservative_effect_c). State-machine enums audited vs specs
+  + on-chain handlers: no drift. FOLLOW-UP: after #8, add missingness_policy to CLAUDE.md
+  invariant-1 frozen-manifest list; agent-def line 41 already over-claims missingness is frozen.
+
+KNOWN RED -> QUARANTINED (this session's cross-agent tree hazard): the architect's v1.2 edit
+  to the shared specs/examples/manifest.example.json broke verifier-cli build_golden_bundle.py
+  (it rebuilt the golden-happy bundle from that live file and asserted 74e0bb82). Verifier
+  agent dispatched to PIN the golden fixture to its frozen v1.1 bytes (restore green; a golden
+  must not regenerate from a mutable source). The golden-happy bundle stays v1.1/74e0bb82 until
+  the #8 fan-out migrates it to ba632e8a. Confirm green before trusting the tree.
+
+#8 FAN-OUT SURFACE (still to migrate to v1.2/ba632e8a): verifier-cli/fixtures/
+  build_golden_bundle.py + bundles/golden-happy/{manifest,provenance,roots}.json,
+  tests/test_happy_bundle.py, dashboard/public/bundles/golden-happy/{provenance,roots}.json,
+  causal-engine studies.py:1334 (STALE PROSE — says missingness is opt-in; v1.2 makes it
+  MANDATORY), SDK manifest field + cross-impl vectors. reward/evidence/assignment roots
+  UNCHANGED — only manifest_hash moves.
+
+DEVNET (task #1, still 0 SOL): SEQUENTIAL deploy (largest-first, buffer auto-refunds between
+  each) peak = ~9.77 SOL, NOT 17.16 all-at-once. Fund ~10.5 SOL (peak + fees + retry slack).
+  Order largest->smallest. `solana program close --buffers` only for a leaked buffer after a
+  FAILED deploy. Rent formula (offline): (128+bytes)*6960 lamports. Resident-after ~8.58 SOL.
+
+USER-OWNED, FLAG EVERY SESSION: (1) devnet funding ~10.5 SOL; (2) pilot validation 6 interviews
+  / 2 technical reviews / 1 external replay; (3) external security reviewer engagement.
+
+================================================================================
 HOW TO RESUME
 ================================================================================
 Start command (from repo root):
@@ -439,7 +503,14 @@ First THREE things a new session must verify BEFORE touching code:
        cd mvp/causal-rewards/verifier-cli/reference && python3 -c "import json,canonical; \
        m=json.load(open('../../specs/examples/manifest.example.json')); \
        print(canonical.sha256_hex(canonical.canonical_json_bytes(m)))"
-     Expect: 74e0bb825013fcd4a2327b234a5f44c48cd709e7a3025cd30a3b26ace68f81b2
+     Expect (v1.2): ba632e8a3594ca9a394a7ef7efee0c1b16156cdd06720047a6aabfbb9b2f69fb
+     (Was 74e0bb82… under v1.1. v1.2 added frozen design.parameters.missingness_policy
+      + bumped spec_version/manifest_version to 1.2.0; CJSON 3852 -> 3886 bytes.
+      reward_curve_hash 14b0ec34… and evidence 901b08d5… are UNCHANGED.
+      The verifier golden-happy BUNDLE fixture is deliberately still at v1.1/74e0bb82
+      (quarantined; task #8 fan-out migrates it to ba632e8a). Both are internally
+      consistent — the spec example and the frozen audit bundle are simply at different
+      manifest versions until #8 runs.)
   2. Re-run the verifier vector self-check (must exit 0, all vectors match):
        cd mvp/causal-rewards/verifier-cli/reference && python3 verify_vectors.py
   3. Confirm the simulator determinism gate still holds:
