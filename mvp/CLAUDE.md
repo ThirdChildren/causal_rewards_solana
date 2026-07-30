@@ -36,8 +36,12 @@ These are correctness properties, not preferences. Violating one is a bug even i
    any artifact-producing code path.
 3. **Conservative payouts.** Reward from a cohort uses a *lower confidence bound* after
    converting the effect to a positive-improvement metric. `conservative_effect =
-   max(0, effect - critical_value * standard_error)`. No positive payout from a cohort
-   that fails the minimum-sample rule or whose conservative bound is ≤ 0.
+   max(0, effect - critical_value * standard_error)`. The cohort allocation is the *frozen
+   reward curve* evaluated on that bound — `alloc_c = reward_curve(conservative_effect_c)`
+   (piecewise-linear over the manifest's frozen breakpoints) — then absolute-scaled with
+   downward-only overflow scaling and unused budget recovered (never up-normalized). There
+   is no `value_scale` multiplier; the curve's scale is the curve. No positive payout from a
+   cohort that fails the minimum-sample rule or whose conservative bound is ≤ 0.
 4. **Cohort-level estimand.** The experimental unit is a geographic cohort within a time
    block — never an individual device. Within a cohort, reward is split by a *frozen*
    quality-weighted rule. We never claim to identify an individual device's counterfactual.

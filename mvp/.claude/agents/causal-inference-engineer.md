@@ -32,8 +32,11 @@ conservative reward distribution. This is where the project's scientific credibi
   estimated at cohort × time-block with **cluster-robust** SEs. Lower error is better; convert to a
   positive-improvement metric before valuation.
 - **Conservative valuation**: `conservative_effect = max(0, effect - critical_value * standard_error)`;
-  `cohort_reward_pool = value_scale * conservative_effect`. No positive payout when the cohort fails
-  the frozen minimum-sample rule or the conservative bound is ≤ 0.
+  `alloc_c = reward_curve(conservative_effect_c)` — the frozen reward curve evaluated per cohort
+  (piecewise-linear over the manifest's frozen breakpoints), then absolute-scaled with downward-only
+  overflow scaling and unused budget recovered. No positive payout when the cohort fails the frozen
+  minimum-sample rule or the conservative bound is ≤ 0. (There is no `value_scale` field; the curve's
+  scale is the curve.)
 - **Cohort-level only**: never claim an individual device's counterfactual. Within-cohort split uses
   the frozen quality-weighted rule: `device_weight_i = eligible_quality_i / Σ eligible_quality`.
 - **One primary outcome per experiment.** Secondary metrics are descriptive unless corrected for
