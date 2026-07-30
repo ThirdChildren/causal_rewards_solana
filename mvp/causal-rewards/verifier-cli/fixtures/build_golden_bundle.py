@@ -8,7 +8,7 @@ so a green run is an end-to-end reproduction, not a tautology.
 
 The happy-path bundle binds, in one audit bundle:
 
-* ``manifest.json``        specs/examples/manifest.example.json, canonical bytes -> 74e0bb82…
+* ``manifest.json``        PINNED v1.1 manifest bytes (fixtures/pinned/…) canonical -> 74e0bb82…
 * ``assignment.parquet``   assign-01-bernoulli-p50 leaves           -> c229b5cc…
 * ``evidence/epoch-*``     evidence-01 / -02 / -03 ordered leaves   -> a13e1cdc / e45697c8 / 1010891b
 * ``analysis.json``        binds the 3 epoch roots (the seam) + reward root
@@ -39,11 +39,16 @@ if str(REFERENCE) not in sys.path:
 import canonical  # noqa: E402
 import merkle  # noqa: E402
 
-SPECS = REPO / "specs"
 VECTORS = REPO / "test-vectors"
 
 MANIFEST_HASH_PREFIX = "74e0bb82"
 EXPERIMENT_ID = "env-sensors-pilot-001"
+
+# PIN (task #8): frozen v1.1 manifest bytes for the golden-happy bundle. Sourced from a
+# dedicated pinned fixture — NOT from the live specs/examples/manifest.example.json, which
+# protocol-architect advanced to v1.2 (ba632e8a). The golden bundle stays at 74e0bb82 until
+# the v1.2 fan-out migration (task #8) deliberately regenerates it.
+PINNED_MANIFEST_V1_1 = FIXTURES_DIR / "pinned" / "manifest.golden-happy.v1_1.json"
 
 
 def _load(rel: str) -> Any:
@@ -78,8 +83,15 @@ def build(dest: Path) -> Path:
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
 
-    # -- manifest.json: canonical bytes of the example manifest (golden 74e0bb82) ----------
-    manifest = json.loads((SPECS / "examples" / "manifest.example.json").read_bytes().decode("utf-8"))
+    # -- manifest.json: canonical bytes of the PINNED v1.1 manifest (golden 74e0bb82) ------
+    # PIN (task #8): the golden-happy bundle is a FROZEN v1.1 audit bundle and must stay
+    # reproducible at manifest 74e0bb82 (CJSON 3852 bytes). We deliberately DO NOT read the
+    # live specs/examples/manifest.example.json here: protocol-architect ratified v1.2 (adds
+    # design.parameters.missingness_policy), moving that mutable spec example to ba632e8a
+    # (3886 bytes). A golden fixture must be PINNED, not regenerated from a source file that
+    # can drift under it. The v1.2 fan-out migration (task #8) is the ONLY thing that should
+    # advance this bundle from 74e0bb82 -> ba632e8a; until then this pin holds it at v1.1.
+    manifest = json.loads(PINNED_MANIFEST_V1_1.read_bytes().decode("utf-8"))
     manifest_bytes = canonical.canonical_json_bytes(manifest)
     manifest_hash = canonical.sha256_hex(manifest_bytes)
     _assert(manifest_hash.startswith(MANIFEST_HASH_PREFIX),
