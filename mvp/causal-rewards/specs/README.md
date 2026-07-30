@@ -23,14 +23,18 @@ never silently diverge.
   algorithm (numbers-as-strings, CJSON, SHA-256, Merkle, seed commit/reveal) an independent
   implementation reproduces exactly.
 
-## Not ratified (proposals and open items — NOTHING here is in force)
+## v1.2 (approved scope: frozen missingness ONLY, 2026-07-30)
 
-- `v1.2-migration-proposal.md` — DRAFT. The **single** v1.2 package: S1 missingness (ready),
-  S2 concentration/multiplicity remedy (**slot, content TBD**), S3 clarifications; plus the
-  independent participant-leaf pin. Carries the exact computed golden cost of every candidate.
-- `multiplicity-recommendation.md` — **WITHDRAWN-PENDING-DATA (2026-07-28)**. Its structural premise
-  was wrong (it described allocation as a share of budget; allocation is absolute). Restructured to
-  receive `causal-inference-engineer`'s four-way + floor-sweep + cap numbers. Do not cite its tables.
+- `v1.2-migration-proposal.md` — S1 (frozen `design.parameters.missingness_policy`, **collapsed
+  single-field form**) is APPROVED and LANDING as a specs-only staged commit; S2 retired (no spec
+  field), S3 deferred out of scope, B1 independent. **The manifest golden moves `74e0bb82…` →
+  `ba632e8a…`** by this landing; `reward_curve_hash` and evidence golden are unchanged. Cross-impl
+  fan-out (engine/verifier/SDK/vectors) is sequenced as a separate task.
+- `multiplicity-recommendation.md` — §4 **APPROVED AS GUIDANCE** (calibrated + saturating-cap default
+  curve, each experiment freezes its own). Not a spec change: moves no frozen field, no spec golden
+  (Reading B). Concrete curve numbers pending the Condition-1 finalized curve.
+
+## Not ratified (open items — NOTHING here is in force)
 - `reward-policy.md` Appendix B — **Q-CURVE-1**: nothing constrains `reward_curve` outputs relative
   to `budget_base_units` or `cohort_count`. Open; candidates in the v1.2 proposal (S3/C3).
 - `serialization.md` §6.5.2 — the epoch sub-root → singular on-chain field `combine()` mapping is
@@ -38,12 +42,13 @@ never silently diverge.
   `combine(R)`/`combine(Q)` for `n ≥ 2`. Unconfirmed; not resolved unilaterally.
 - `serialization.md` §6.2 — participant leaf/sort still stamped `PROVISIONAL-UNPINNED-6.2`.
 
-**Status:** M1 frozen-READY. All serialization open items are ratified; `manifest.golden.md` carries
-final (non-provisional) golden hashes; the four M1 design questions (student_t df, weight-formula
-grammar, switchback carryover/washout, interference assumption) are resolved in-spec. Remaining step
-is the orchestrator's freeze gate. Frozen spec is the M1 acceptance artifact and a hard dependency
-for M2/M3. **Frozen goldens (unchanged, re-verified 2026-07-28):** manifest
-`74e0bb82…0f81b2`, `reward_curve_hash` `sha256:14b0ec34…856d41`, evidence `901b08d5…fa75b`.
+**Status:** M1 spec set complete; v1.2 missingness migration LANDING (specs-only). All serialization
+open items are ratified; the four M1 design questions (student_t df, weight-formula grammar,
+switchback carryover/washout, interference assumption) are resolved in-spec. **Current goldens
+(v1.2):** manifest **`ba632e8a…9b2f69fb`** (moved from `74e0bb82…` by the missingness field +
+version bump), `reward_curve_hash` `sha256:14b0ec34…856d41` (unchanged), evidence `901b08d5…fa75b`
+(unchanged). Implementations still reproducing `74e0bb82…` are intentionally desynced until the
+cross-impl fan-out task runs.
 
 ## License
 

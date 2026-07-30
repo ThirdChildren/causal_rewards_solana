@@ -1,14 +1,15 @@
 # Canonical Serialization & Hashing (NORMATIVE — RATIFIED)
 
-**Spec version:** 1.1.0
-**Wire/hash contract version:** 1.1.0 — advanced from 1.0.0 by an **additive, hash-compatible**
-minor revision (see §9 Revision history). Every pre-existing golden is **byte-identical** to 1.0:
-manifest `74e0bb82…`, `reward_curve_hash` `14b0ec34…`, evidence example `901b08d5…`, and all 11
-existing assignment roots (bernoulli / fixed_count). The manifest `spec_version` field stays
-`"1.0.0"` and a v1.0.0 manifest hashes identically under 1.1. v1.1 only **pins previously-open
-residuals** (reward `leaf_index` assignment, §6.6; switchback + matched_cluster seed→assignment
-derivations, §7.4) and adds their new-but-additive byte layouts — it changes no byte of any existing
-hashed artifact.
+**Spec version:** 1.2.0
+**Wire/hash contract version:** 1.2.0 — a **major** revision (see §9): the manifest golden **moves**
+from `74e0bb82…` to `ba632e8a…` because v1.2 adds the required frozen field
+`design.parameters.missingness_policy` and bumps the manifest `spec_version`/`manifest_version` to
+`"1.2.0"` (Invariant 1 — the missingness policy must be frozen before analysis). The **byte algorithm
+is unchanged** (CJSON, Merkle, SHA-256 are byte-identical to 1.0/1.1); only the manifest *content*
+changed. `reward_curve_hash` `14b0ec34…`, the evidence example `901b08d5…`, and all 11 existing
+assignment roots are **byte-identical** to 1.1 — v1.2 touches only the manifest artifact.
+The prior additive, hash-compatible 1.1.0 revision (which kept the manifest `spec_version` at
+`"1.0.0"`) is recorded below.
 **Status:** RATIFIED. This is the single authoritative byte-level definition. No PROVISIONAL banner.
 **Owner:** `protocol-architect` (ratifier). Ratified from the `verifier-reproducibility-engineer`
 proposal (`verifier-cli/docs/canonical-serialization.md`) and its reference implementation
@@ -758,6 +759,30 @@ of the whole bundle addressed here.
 The wire/hash contract version and this document's version advance together (both `serialization.md`
 is wholly the wire/hash contract). A change that alters no byte of any existing hashed artifact is an
 **additive minor**; a change that alters a golden is a **major** and a manifest `spec_version` bump.
+
+### 1.2.0 — frozen missingness policy (MAJOR; manifest golden moves)
+
+Recorded 2026-07-30. Owner-approved v1.2 scope: **frozen missingness ONLY** (collapsed single-field
+form; multiplicity default stays `none`; Reading B for the curve, so the curve golden does NOT move).
+See `v1.2-migration-proposal.md` "Slot S1".
+
+- **New required manifest field `design.parameters.missingness_policy` ∈ {`ineligible`,
+  `impute_cohort_mean`}.** Closes a live Invariant-1 gap: the causal engine previously *defaulted*
+  this policy in code (`params.get("missingness_policy", "ineligible")`), so an analyst could change
+  how missing cohort-epochs are handled after seeing data by changing code. Freezing the field
+  removes that path. The engine consumes exactly this one knob (`panel.py`); no `evidence_schedule`
+  object and no `_micro` coverage field is introduced, so **§2.2 is unchanged**.
+- **Version bumps.** Manifest `spec_version` `"1.0.0"` → `"1.2.0"` and `manifest_version` `"1.0.0"` →
+  `"1.2.0"` (both hashed; both advance because the schema gained a required field). `spec_version` is
+  the discriminant that keeps a pre-v1.2 manifest (lacking the field) distinguishable from a v1.2 one.
+- **Golden move (the only artifact affected).** `manifest_golden` `74e0bb82…` → **`ba632e8a3594ca9a394a7ef7efee0c1b16156cdd06720047a6aabfbb9b2f69fb`**;
+  CJSON byte length 3852 → 3886. `reward_curve_hash` UNCHANGED `sha256:14b0ec34…` (the curve is not
+  edited — Reading B). Evidence example `901b08d5…` and all 11 `assign-*` roots UNCHANGED. Computed
+  and re-verified with `verifier-cli/reference/canonical.py`.
+- **Cross-impl fan-out is sequenced SEPARATELY** (owner ruling): this revision lands specs-only
+  (schema + example + this entry + `manifest.golden.md`). Engine/verifier/SDK/test-vector propagation
+  to `ba632e8a…` is a distinct, later task; until it runs, the spec example is intentionally desynced
+  from implementations that still reproduce `74e0bb82…`.
 
 ### 1.1.0 addendum — evidence ingestion codes + epoch sub-root mapping (additive, hash-compatible)
 

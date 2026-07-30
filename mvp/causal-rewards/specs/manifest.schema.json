@@ -151,7 +151,12 @@
         "parameters": {
           "description": "Design-specific parameters, frozen with the manifest as part of the pre-analysis plan (Invariant 1). All numeric values are canonical integer strings (serialization.md §2); all keys ASCII. This object MUST NOT contain any simulator ground-truth knob (true_effect, interference magnitude, confounding, Sybil parameters) — those are simulation inputs, never manifest fields (Invariant 5/6). interference_assumption declares the (untestable) no-interference/partial-interference assumption the causal claim rests on. For template=switchback, carryover_blocks and washout_blocks are additionally required (frozen so the discarded-block set is part of the pre-analysis plan, not chosen after seeing outcomes).",
           "type": "object",
+          "required": ["missingness_policy"],
           "properties": {
+            "missingness_policy": {
+              "description": "Frozen pre-analysis policy (Invariant 1) for how a cohort-epoch with a missing outcome or covariate is handled before any estimate is computed. 'ineligible' = drop the missing cohort-epoch (the strictest option; the row does not enter estimation). 'impute_cohort_mean' = deterministic cohort-mean fill of the missing outcome/covariate, then estimate. This field is REQUIRED and frozen: the causal engine MUST read it and MUST NOT substitute a code default (the pre-v1.2 engine defaulted to 'ineligible', which was the freeze-before-reveal gap this field closes).",
+              "enum": ["ineligible", "impute_cohort_mean"]
+            },
             "interference_assumption": {
               "description": "The frozen cross-unit interference assumption underpinning the causal estimand. 'no_interference' = SUTVA at the cohort x time-block level. 'partial_interference_within_cohort' = interference is contained within a cohort; distinct cohorts do not interfere (the standard cluster-randomization assumption). 'spatial_bounded' = interference is limited to adjacent cohorts within the stated spatial_resolution; requires a separate spillover analysis.",
               "enum": ["no_interference", "partial_interference_within_cohort", "spatial_bounded"]

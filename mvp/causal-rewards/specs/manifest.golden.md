@@ -1,8 +1,17 @@
 # Manifest Golden Hash (FROZEN)
 
-**Spec version:** 1.0.0
+**Spec version:** 1.2.0
 **Status:** FROZEN — computed with the RATIFIED canonical serialization (`serialization.md`).
 **Artifact:** `specs/examples/manifest.example.json`
+
+> **v1.2 migration (2026-07-30).** The manifest golden moved from the v1.0/1.1 value
+> `74e0bb825013fcd4a2327b234a5f44c48cd709e7a3025cd30a3b26ace68f81b2` to the v1.2 value below because
+> v1.2 adds the required frozen field `design.parameters.missingness_policy` and bumps
+> `spec_version`/`manifest_version` to `"1.2.0"` (see `v1.2-migration-proposal.md` "Slot S1" and
+> `serialization.md` §9 `1.2.0`). The byte algorithm is unchanged; only the manifest content changed.
+> `reward_curve_hash` did NOT move (the curve is unedited — Reading B). **Cross-impl fan-out
+> (engine/verifier/SDK/vectors adopting `ba632e8a…`) is sequenced as a separate task; until it runs,
+> implementations still reproducing `74e0bb82…` are intentionally desynced from this example.**
 
 This is the golden hash `verifier-reproducibility-engineer` builds test vectors against. It is the
 authoritative expected output for the canonical example manifest under the ratified serialization,
@@ -29,10 +38,13 @@ canonical byte string, not the file bytes.
 ```
 canonical serialization : CJSON (serialization.md §2/§3, RATIFIED)
 hash function           : SHA-256
-CJSON byte length       : 3852
+CJSON byte length       : 3886
 reward_curve_hash       : sha256:14b0ec34d3653a5857ceef10b9bdfee264a6865172c2b2cfb1d2405fae856d41
-manifest_golden_sha256  : 74e0bb825013fcd4a2327b234a5f44c48cd709e7a3025cd30a3b26ace68f81b2
+manifest_golden_sha256  : ba632e8a3594ca9a394a7ef7efee0c1b16156cdd06720047a6aabfbb9b2f69fb
 ```
+
+(Superseded v1.0/1.1 value, retained for the migration record: manifest_golden_sha256
+`74e0bb825013fcd4a2327b234a5f44c48cd709e7a3025cd30a3b26ace68f81b2`, CJSON byte length 3852.)
 
 - `reward_curve_hash` = `SHA-256(CJSON(reward_policy.reward_curve))`, over the object
   `{"breakpoints":[["0","0"],["100000","20000000000"],["500000","80000000000"],["1000000","120000000000"]],"type":"piecewise_linear_monotonic"}`.
