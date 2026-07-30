@@ -472,9 +472,12 @@ CONDITION 2/3 + normative ruling (architect, commits 50d29fd, 0001746, 919e4a6, 
 KNOWN RED -> QUARANTINED (this session's cross-agent tree hazard): the architect's v1.2 edit
   to the shared specs/examples/manifest.example.json broke verifier-cli build_golden_bundle.py
   (it rebuilt the golden-happy bundle from that live file and asserted 74e0bb82). Verifier
-  agent dispatched to PIN the golden fixture to its frozen v1.1 bytes (restore green; a golden
-  must not regenerate from a mutable source). The golden-happy bundle stays v1.1/74e0bb82 until
-  the #8 fan-out migrates it to ba632e8a. Confirm green before trusting the tree.
+  RESOLVED (commit aa041a3): golden fixture now PINNED to a dedicated frozen v1.1 file
+  (fixtures/pinned/manifest.golden-happy.v1_1.json); build_golden_bundle.py reads that, not the
+  live spec example. Verifier suite 33/33 green, reproduces 74e0bb82 at 3852 bytes, crp-verify
+  ACCEPT. Two greppable `PIN (task #8)` markers. Golden-happy bundle stays v1.1/74e0bb82 until
+  the #8 fan-out migrates it to ba632e8a — spec example (v1.2) and frozen bundle (v1.1) are each
+  internally consistent.
 
 #8 FAN-OUT SURFACE (still to migrate to v1.2/ba632e8a): verifier-cli/fixtures/
   build_golden_bundle.py + bundles/golden-happy/{manifest,provenance,roots}.json,
