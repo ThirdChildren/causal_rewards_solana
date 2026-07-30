@@ -170,3 +170,41 @@ Every scenario run emits a canonical content hash (see `simulator/README.md`,
 serialization (`specs/serialization.md`). The benchmark report will publish, for each scenario:
 the scenario file, the committed seed, the container digest, the content hash, and the per-baseline
 metric table — so any third party can reproduce the exact numbers and the ranking.
+
+---
+
+## 7. Reward-curve fixture (decoupled from the spec example) — Condition 3
+
+The at-scale benchmark uses a **separate manifest fixture** for its reward curve, distinct from
+`specs/examples/manifest.example.json`. The spec example is the frozen conformance artifact (its curve
+golden `sha256:14b0ec34…` does not move under the v1.2 "Reading B" decision); the benchmark curve is
+the **recommended shipped-scale + 10%`B` saturating-cap default** (`reward_curve_hash
+sha256:eeab732e…`; recalibration was evaluated and REJECTED under Condition 1 on under-deployment
+grounds — `docs/compensation-study.md`). Binding the benchmark to the frozen example would either
+force a spec-golden move on every retune or publish OLD-curve numbers under a NEW recommendation —
+both incoherent. So they are decoupled.
+
+**Fixture contract** (normative source: `specs/v1.2-migration-proposal.md` "Benchmark manifest
+fixture"; `protocol-architect` defines it, `causal-inference-engineer` creates + wires it):
+
+- **Path:** `causal-engine/fixtures/benchmark-manifest.json` (a benchmark input, NOT a spec artifact;
+  never a spec golden; exempt from the manifest-golden regeneration protocol).
+- **Content:** the structure of `manifest.example.json` with exactly two deltas — the recommended
+  shipped-scale + 10%`B` saturating `reward_curve`
+  (`[["0","0"],["50000","10000000000"],["100000","10000000000"],["500000","10000000000"],["1000000","10000000000"]]`
+  for `B = 100e9`; general rule: shipped scale, ceiling = 10% of `B'`), and its `reward_curve_hash`
+  recomputed by `verifier-cli/reference/canonical.py`. The `budget → curve-output` scale is UNCHANGED
+  (no recalibration).
+- **Loading:** `studies.py::run_study` MUST read this fixture, NOT the spec example. The two diverge
+  by construction; that divergence is the point.
+- **Hashes:** the fixture's own `reward_curve_hash` = `sha256:eeab732e…` (FINALIZED) and its
+  whole-manifest content hash are FIXTURE hashes (they move whenever the benchmark curve is retuned,
+  with no spec-version bump), recorded in the benchmark report, not in `specs/manifest.golden.md`.
+- **Provenance line:** the benchmark report MUST carry, next to every metric table, the curve-source
+  line specified in `docs/benchmark-report.md` "Curve provenance", so a reader sees exactly which
+  curve produced the published numbers.
+
+Breakpoints, cap ceiling, and the fixture `reward_curve_hash` are FINALIZED by the Condition-1
+compensation study (`docs/compensation-study.md`): shipped scale, per-cohort ceiling = 10% of `B`,
+`reward_curve_hash sha256:eeab732e…`. Recalibration was evaluated and rejected on under-deployment
+grounds — the shipped `budget → curve-output` scale is kept unchanged.
