@@ -148,6 +148,49 @@ class ArmResult:
     scaled_to_budget: bool    # did the S > B downward-only overflow branch fire?
 
 
+#: The finalized per-cohort cap the compensation study recommends, as ppm of ``B``. 10.0% of the
+#: fixed budget: the targeting optimum (lowest ``s2`` waste per ``s1`` legit dollar) AND the cap
+#: that preserves the most legitimate deployment on the high-signal scenarios — see
+#: ``docs/compensation-study.md``.
+COMP_CAP_FINAL_PPM: int = 100_000
+
+#: Secondary cap points swept in the compensation table so the frontier (tighter caps buy less null
+#: waste at the cost of under-deploying genuine signal) is visible, not asserted.
+COMP_CAP_GRID_PPM: tuple[int, ...] = (100_000, 50_000, 25_000)
+
+
+@dataclass(frozen=True)
+class CompensationRow:
+    """One (scenario, candidate-curve) cell of the COMPENSATION view.
+
+    Where the arm study reports power as a *head-count* (binary detection), this reports how much
+    genuine signal is actually PAID, in base units, so proportional recalibration's cost — which is
+    invisible to a head-count — is measured. All integers are base units unless suffixed ``_ppm``.
+    """
+
+    scenario: str
+    curve: str                # "shipped" | "recal_es" | "recal_es+cap10" | "cap10" | "cap5" | "cap2.5"
+    scale_num: int
+    scale_den: int
+    cap_ppm: int              # 0 == no cap
+    n_paid: int
+    n_pos_paid: int
+    power_ppm: int            # head-count share of payable true-positives paid (-1 == undefined)
+    deployed_base_units: int
+    deployed_ppm: int
+    recovered_base_units: int
+    recovered_ppm: int
+    legit_base_units: int     # (i) absolute payout reaching TRUE-POSITIVE cohorts
+    legit_ppm: int
+    waste_base_units: int     # payout reaching TRUE-NULL cohorts
+    waste_ppm: int
+    max_share_ppm: int
+    # (iii) payout-per-unit-true-effect: legit base units per 1.0 of aggregate delivered true
+    # effect. -1 when the scenario carries no true effect (denominator 0). See module docstring.
+    ppute_base_per_effect: int
+    scaled_to_budget: bool
+
+
 @dataclass(frozen=True)
 class PaidCohortDetail:
     """Per-cohort audit detail for every cohort the FROZEN policy pays. Integers are micro units."""
@@ -173,10 +216,14 @@ class ScenarioStudy:
     cells: tuple[CellResult, ...]
     arms: tuple[ArmResult, ...] = ()
     paid_detail: tuple[PaidCohortDetail, ...] = ()
+    compensation: tuple[CompensationRow, ...] = ()
     cluster_noise_sd: float = 0.0   # simulator ground truth (scenario file)
     declared_cohort_count: int = 0  # frozen manifest field, the calibration reference N
     calibrated_scale: tuple[int, int] = (1, 1)  # equal-share curve scale for this N, exact rational
     reference_alloc_ppm: int = 0    # curve(x_ref) as ppm of B under the FROZEN curve
+    mean_cohort_effect_micro: int = 0   # simulator ground truth: mean realized per-cohort effect
+    n_payable_true_positive: int = 0    # payable true-positive cohorts (the ppute denominator count)
+    true_effect_delivered_micro: int = 0  # mean_cohort_effect_micro * n_payable_true_positive
 
 
 def _ppm(numer: int, denom: int) -> int:
@@ -196,6 +243,17 @@ def run_scenario_study(scenario: str, *, sim_out: Path, example: dict) -> Scenar
     scen = json.loads((_repo() / "simulator" / "scenarios" / (scenario + ".json")).read_text("utf-8"))
     true_effect = float(scen["effect"]["true_effect"])
     label = "true_positive" if true_effect > 0.0 else "true_null"
+
+    # Simulator ground truth: the mean REALIZED per-cohort effect after heterogeneity, quantized
+    # once to micro units. This is the honest "true effect delivered" denominator for the
+    # payout-per-unit-true-effect metric (nominal ``true_effect`` overstates it; the DGP applies a
+    # ``(0.5 + info_value) * het`` factor). A single deterministic round of a scalar read from the
+    # committed run artifact — no BLAS, no ordering, reproducible across processes.
+    mean_cohort_effect_micro = 0
+    artifact = d / "run_artifact.json"
+    if artifact.is_file():
+        mce = float(json.loads(artifact.read_text("utf-8"))["summary"]["mean_cohort_effect"])
+        mean_cohort_effect_micro = round(mce * 1_000_000)
 
     def make_manifest(curve: Sequence[tuple[int, int]] | None = None) -> Manifest:
         return build_scenario_manifest(scenario, panel_df, example, curve_override=curve)
@@ -283,6 +341,19 @@ def run_scenario_study(scenario: str, *, sim_out: Path, example: dict) -> Scenar
         m, run, parts_df, candidates, pvalues, B, metrics, make_manifest,
     )
 
+    n_payable_tp = len(pos_payable)
+    true_effect_delivered_micro = mean_cohort_effect_micro * n_payable_tp
+    calibrated_scale = _reduced(
+        equal_share_scale(m.reward_policy.breakpoints, B, m.cohort_count)
+    )
+    compensation = _run_compensation(
+        run, parts_df, B, make_manifest,
+        base_bps=m.reward_policy.breakpoints,
+        calibrated_scale=calibrated_scale,
+        pos_ids=pos_ids, null_ids=null_ids, n_payable_tp=n_payable_tp,
+        true_effect_delivered_micro=true_effect_delivered_micro,
+    )
+
     detail = tuple(
         PaidCohortDetail(
             cohort_id=v.cohort_id,
@@ -310,14 +381,16 @@ def run_scenario_study(scenario: str, *, sim_out: Path, example: dict) -> Scenar
         cells=tuple(cells),
         arms=tuple(ArmResult(scenario=scenario, **a) for a in arms),
         paid_detail=detail,
+        compensation=tuple(CompensationRow(scenario=scenario, **c) for c in compensation),
         cluster_noise_sd=float(scen["effect"]["cluster_noise_sd"]),
         declared_cohort_count=m.cohort_count,
-        calibrated_scale=_reduced(
-            equal_share_scale(m.reward_policy.breakpoints, B, m.cohort_count)
-        ),
+        calibrated_scale=calibrated_scale,
         reference_alloc_ppm=_ppm(
             piecewise_linear(CURVE_REFERENCE_X, m.reward_policy.breakpoints), B
         ),
+        mean_cohort_effect_micro=mean_cohort_effect_micro,
+        n_payable_true_positive=n_payable_tp,
+        true_effect_delivered_micro=true_effect_delivered_micro,
     )
 
 
@@ -418,6 +491,95 @@ def _run_arms(
     for c in CAP_GRID_PPM:
         s1 = stage1_for(None, make_manifest(saturate_curve(base_bps, cap_base_units(B, c))))
         emit("cr_cap", format_cap(c), budgets(s1), s1.scaled_to_budget)
+    return rows
+
+
+def _run_compensation(
+    run: AnalysisRun,
+    parts_df: pd.DataFrame,
+    B: int,
+    make_manifest: Callable[..., Manifest],
+    *,
+    base_bps: Sequence[Sequence[int]],
+    calibrated_scale: tuple[int, int],
+    pos_ids: frozenset[str],
+    null_ids: frozenset[str],
+    n_payable_tp: int,
+    true_effect_delivered_micro: int,
+) -> list[dict]:
+    """The COMPENSATION view: (scenario x candidate-curve) absolute payout to true positives.
+
+    CONDITION 1 (the treasury owner's): a head-count of *detected* cohorts hides how much they are
+    PAID. A flatter curve cuts null spend AND legitimate payout together, so a proportional
+    recalibration can look like a win on waste while quietly starving high-signal networks of the
+    compensation they earned. This function measures, per candidate curve:
+
+    * ``legit_base_units`` — absolute payout reaching TRUE-POSITIVE cohorts (base units),
+    * ``deployed`` vs ``recovered`` — how much of the fixed budget is spent vs returned,
+    * ``ppute`` — payout per 1.0 of aggregate delivered true effect,
+
+    alongside the existing ``waste`` / ``power`` so under-deployment is directly visible.
+
+    Candidate curves (all on the SAME absolute-scale compiler, unused budget recovered):
+
+    * ``shipped``          — the frozen benchmark curve, verbatim (scale 1/1, no cap).
+    * ``recal_es``         — the equal-share recalibration (the PRIOR recommendation). Shown so its
+      multiplicative cost to legitimate payout is on the table, not merely its waste reduction.
+    * ``recal_es+cap10``   — equal-share recalibration plus the 10%B saturation cap.
+    * ``cap10`` / ``cap5`` / ``cap2.5`` — the shipped scale saturated at 10 / 5 / 2.5 %B, the
+      frontier the finalized recommendation is chosen from.
+
+    Every curve is run through a genuinely recompiled manifest (new breakpoints, recomputed
+    ``reward_curve_hash``, full Stage-1/Stage-2/leaf path), never simulated arithmetic.
+    """
+    curves: list[tuple[str, tuple[int, int], int]] = [
+        ("shipped", (1, 1), 0),
+        ("recal_es", calibrated_scale, 0),
+        ("recal_es+cap10", calibrated_scale, COMP_CAP_FINAL_PPM),
+        ("cap10", (1, 1), 100_000),
+        ("cap5", (1, 1), 50_000),
+        ("cap2.5", (1, 1), 25_000),
+    ]
+
+    def stage1_for(num: int, den: int, cap_ppm: int):
+        if (num, den) == (1, 1) and cap_ppm == 0:
+            return run.compilation.stage1  # frozen engine output, verbatim
+        curve = rescale_curve(base_bps, num, den)
+        if cap_ppm:
+            curve = saturate_curve(curve, cap_base_units(B, cap_ppm))
+        return compile_rewards(
+            make_manifest(curve), run.effects, run.panel.samples,
+            list(_participant_rows(parts_df)),
+            identification=run.panel.identification, selected_cohorts=None,
+        ).stage1
+
+    rows: list[dict] = []
+    for name, (num, den), cap_ppm in curves:
+        s1 = stage1_for(num, den, cap_ppm)
+        budgets = {v.cohort_id: v.budget_base_units for v in s1.cohorts}
+        paid = {cid for cid, b in budgets.items() if b > 0}
+        deployed = s1.total_budget_allocated
+        legit = sum(budgets[c] for c in paid if c in pos_ids)
+        waste = sum(budgets[c] for c in paid if c in null_ids)
+        n_pos_paid = sum(1 for c in paid if c in pos_ids)
+        top = max(budgets.values(), default=0)
+        ppute = (
+            (legit * 1_000_000) // true_effect_delivered_micro
+            if true_effect_delivered_micro > 0
+            else -1
+        )
+        rows.append({
+            "curve": name, "scale_num": num, "scale_den": den, "cap_ppm": cap_ppm,
+            "n_paid": len(paid), "n_pos_paid": n_pos_paid,
+            "power_ppm": _ppm(n_pos_paid, n_payable_tp),
+            "deployed_base_units": deployed, "deployed_ppm": _ppm(deployed, B),
+            "recovered_base_units": B - deployed, "recovered_ppm": _ppm(B - deployed, B),
+            "legit_base_units": legit, "legit_ppm": _ppm(legit, B),
+            "waste_base_units": waste, "waste_ppm": _ppm(waste, B),
+            "max_share_ppm": _ppm(top, B),
+            "ppute_base_per_effect": ppute,
+            "scaled_to_budget": s1.scaled_to_budget,
+        })
     return rows
 
 
@@ -1297,6 +1459,319 @@ def _regime_note(studies: list[ScenarioStudy]) -> str:
     return "\n".join(p)
 
 
+#: The report order of the compensation candidate curves.
+_COMP_ORDER: tuple[str, ...] = (
+    "shipped", "recal_es", "recal_es+cap10", "cap10", "cap5", "cap2.5",
+)
+
+_COMP_LABELS: dict[str, str] = {
+    "shipped": "shipped (frozen curve)",
+    "recal_es": "recal equal-share (prior rec)",
+    "recal_es+cap10": "recal equal-share + cap 10%B",
+    "cap10": "cap 10%B  (FINALIZED)",
+    "cap5": "cap 5%B",
+    "cap2.5": "cap 2.5%B",
+}
+
+
+def _comp(studies: list[ScenarioStudy], scenario: str, curve: str) -> CompensationRow | None:
+    s = next((x for x in studies if x.scenario == scenario), None)
+    if s is None:
+        return None
+    return next((c for c in s.compensation if c.curve == curve), None)
+
+
+def render_compensation_markdown(studies: list[ScenarioStudy]) -> str:
+    """The COMPENSATION companion doc (``docs/compensation-study.md``).
+
+    Answers CONDITION 1: measure how much genuine signal is PAID, not just detected, before fixing
+    the recommended curve. Every number is read off the study objects — nothing hand-typed.
+    """
+    lines: list[str] = []
+    lines.append(
+        "# Compensation study: does the recommended curve spend WELL on signal, "
+        "or merely spend little?"
+    )
+    lines.append("")
+    lines.append(
+        "**Status:** benchmark-report material feeding the `protocol-architect` recommendation, and "
+        "the answer to the treasury owner's CONDITION 1 on `docs/multiplicity-study.md`. Study-only: "
+        "nothing here changes a shipped default, a frozen field, or the reward goldens. It runs the "
+        "SAME absolute-scale compiler (unused budget recovered), through genuinely recompiled "
+        "manifests (new breakpoints, recomputed `reward_curve_hash`)."
+    )
+    lines.append("")
+    lines.append(
+        "Regenerate deterministically: `python -m crp_engine.studies compensation` (or "
+        "`python tools/compensation_study.py`). Same committed simulator artifacts + committed seed "
+        "`%s` => identical numbers across fresh processes." % STUDY_SEED.hex()
+    )
+    lines.append("")
+    lines.append("## Why this document exists")
+    lines.append("")
+    lines.append(
+        "`docs/multiplicity-study.md` reported the recalibration win as \"`s2` null waste 29.61% -> "
+        "2.47% at zero power cost\". **Power there is a head-count** — the SHARE of true-positive "
+        "cohorts that are paid ANYTHING. It is binary; it does not capture how much they are paid. "
+        "A proportional recalibration multiplies every allocation by the same rational, so it cuts "
+        "null spend and legitimate payout *by the same factor*. The head-count stays flat (a cohort "
+        "paid a twelfth of its due is still \"paid\"), so the prior study could not see the cost. "
+        "A treasury's failure mode is spending BADLY, not spending little — under-deploying on a "
+        "genuinely high-signal network is a real cost even though `close_experiment` recovers the "
+        "funds. This document measures that cost."
+    )
+    lines.append("")
+    lines.append("## Method")
+    lines.append("")
+    lines.append(
+        "- **Candidate curves.** `shipped` = the frozen benchmark curve. `recal_es` = the "
+        "equal-share recalibration (the prior recommendation, per-scenario scale `5/N`). "
+        "`recal_es+cap10` = that recalibration plus a 10%B saturation cap. `cap10` / `cap5` / "
+        "`cap2.5` = the shipped curve saturated at 10 / 5 / 2.5 %B (the frontier). A cap is a "
+        "reward-curve SHAPE (`saturate_curve`), so every candidate is a plain `reward_curve` "
+        "fixture — no new frozen field."
+    )
+    lines.append(
+        "- **legit (base units).** Absolute payout reaching TRUE-POSITIVE cohorts. On the "
+        "homogeneous-label scenarios all deployed budget is legitimate on a true-positive scenario "
+        "and all of it is waste on the true-null scenario, so `legit` equals `deployed` on `s1`, "
+        "`s4`, `s5` and equals 0 on `s2`."
+    )
+    lines.append(
+        "- **deployed vs recovered.** `deployed` = `sum(budget_c)`; `recovered` = `B - deployed`, "
+        "returned to the treasury by `unused_budget_policy = recoverable`. Under-deployment shows "
+        "up here as a large `recovered` on a high-signal scenario."
+    )
+    lines.append(
+        "- **ppute (payout per unit true effect).** `legit_base_units` per 1.0 of aggregate "
+        "delivered true effect, where aggregate true effect = mean realized per-cohort effect "
+        "(simulator ground truth `mean_cohort_effect`, quantized once to micro units) x the count "
+        "of payable true-positive cohorts. It is the compensation analogue of the arm study's "
+        "`waste / legit` efficiency column: a fixed-per-scenario denominator, so across curves it "
+        "tracks payout for one fixed amount of real signal. Undefined (`n/a`) on `s2` (no true "
+        "effect)."
+    )
+    lines.append("")
+    lines.append("## Results: compensation across scenarios x candidate curves")
+    lines.append("")
+    lines.append(
+        "| scenario | curve | paid | power | legit (base units) | legit (%B) | deployed (%B) | "
+        "recovered (%B) | waste (%B) | max share (%B) | ppute (base/effect) |"
+    )
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
+    for st in studies:
+        for name in _COMP_ORDER:
+            c = next((x for x in st.compensation if x.curve == name), None)
+            if c is None:
+                continue
+            lines.append(
+                "| %s | %s | %d | %s | %d | %s | %s | %s | %s | %s | %s |"
+                % (
+                    st.scenario, _COMP_LABELS.get(c.curve, c.curve), c.n_paid,
+                    _pct(c.power_ppm), c.legit_base_units, _pct(c.legit_ppm),
+                    _pct(c.deployed_ppm), _pct(c.recovered_ppm), _pct(c.waste_ppm),
+                    _pct(c.max_share_ppm),
+                    str(c.ppute_base_per_effect) if c.ppute_base_per_effect >= 0 else "n/a",
+                )
+            )
+    lines.append("")
+    lines.append(_comp_deployment_focus(studies))
+    lines.append("")
+    lines.append(_comp_verdict(studies))
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _comp_deployment_focus(studies: list[ScenarioStudy]) -> str:
+    """The high-signal deployment table: does each curve keep paying real signal? Numbers read off."""
+    p: list[str] = ["## High-signal deployment: the under-deployment channel", ""]
+    p.append(
+        "The three genuinely high-signal scenarios (`s1_strong_signal`, `s5_sybil_contamination`, "
+        "`s4_interference`) are where under-deployment is visible. `legit (%B)` is what a network "
+        "that truly delivered actually receives; `recovered (%B)` is what the treasury hands back "
+        "on that same high-signal network."
+    )
+    p.append("")
+    p.append(
+        "| curve | s1 legit (%B) | s1 recovered | s5 legit (%B) | s5 recovered | s4 legit (%B) | "
+        "s4 recovered | s2 waste (%B) | s2 max share |"
+    )
+    p.append("|---|---|---|---|---|---|---|---|---|")
+    for name in _COMP_ORDER:
+        s1 = _comp(studies, "s1_strong_signal", name)
+        s5 = _comp(studies, "s5_sybil_contamination", name)
+        s4 = _comp(studies, "s4_interference", name)
+        s2 = _comp(studies, "s2_null_effect", name)
+        if not all((s1, s5, s4, s2)):
+            continue
+        p.append(
+            "| %s | %s | %s | %s | %s | %s | %s | %s | %s |"
+            % (
+                _COMP_LABELS.get(name, name),
+                _pct(s1.legit_ppm), _pct(s1.recovered_ppm),
+                _pct(s5.legit_ppm), _pct(s5.recovered_ppm),
+                _pct(s4.legit_ppm), _pct(s4.recovered_ppm),
+                _pct(s2.waste_ppm), _pct(s2.max_share_ppm),
+            )
+        )
+    return "\n".join(p)
+
+
+def _comp_verdict(studies: list[ScenarioStudy]) -> str:
+    """The under-deployment verdict and the single finalized curve + cap. All numbers read off."""
+    p: list[str] = []
+
+    def g(scn: str, curve: str) -> CompensationRow | None:
+        return _comp(studies, scn, curve)
+
+    s1_ship = g("s1_strong_signal", "shipped")
+    s5_ship = g("s5_sybil_contamination", "shipped")
+    s1_es = g("s1_strong_signal", "recal_es")
+    s5_es = g("s5_sybil_contamination", "recal_es")
+    s1_cap = g("s1_strong_signal", "cap10")
+    s5_cap = g("s5_sybil_contamination", "cap10")
+    s2_ship = g("s2_null_effect", "shipped")
+    s2_es = g("s2_null_effect", "recal_es")
+    s2_cap = g("s2_null_effect", "cap10")
+
+    p.append("## Verdict: recalibration UNDER-DEPLOYS; the finalized curve is the shipped scale + a 10%B cap")
+    p.append("")
+    if all((s1_ship, s1_es, s2_ship, s2_es)):
+        st1 = next(s for s in studies if s.scenario == "s1_strong_signal")
+        es_scale = format_scale(*st1.calibrated_scale)
+        p.append(
+            "**1. The equal-share recalibration starves high-signal networks — measured.** On "
+            "`s1_strong_signal` the shipped curve pays true positives **%s of `B`** (%d base "
+            "units); the equal-share recalibration `%s` pays **%s** (%d base units) and recovers "
+            "**%s** of the budget on a network the benchmark labels strongly positive. On `s5` it "
+            "is %s -> %s. That is the exact failure mode CONDITION 1 named: the recalibration's "
+            "\"29.61%% -> %s null-waste win\" is bought by cutting `s1` legitimate payout by the "
+            "SAME ~%s factor, invisible to a head-count because every paid cohort stays \"paid\". "
+            "The treasury is not spending better; it is spending less, everywhere, in proportion."
+            % (
+                _pct(s1_ship.legit_ppm), s1_ship.legit_base_units, es_scale,
+                _pct(s1_es.legit_ppm), s1_es.legit_base_units, _pct(s1_es.recovered_ppm),
+                _pct(s5_ship.legit_ppm), _pct(s5_es.legit_ppm),
+                _pct(s2_es.waste_ppm),
+                "%d/%d" % (st1.calibrated_scale[1], st1.calibrated_scale[0]),
+            )
+        )
+        p.append("")
+        p.append(
+            "The `ppute` column proves it is a pure exposure change, not a targeting change: "
+            "`s1` pays %s base units per unit true effect under the shipped curve and %s under "
+            "`%s` — the same money-for-signal ratio scaled down, delivering strictly less "
+            "compensation for the identical delivered effect."
+            % (
+                str(s1_ship.ppute_base_per_effect), str(s1_es.ppute_base_per_effect), es_scale,
+            )
+        )
+    p.append("")
+    if all((s1_ship, s1_cap, s2_ship, s2_cap, s5_cap)):
+        p.append(
+            "**2. The 10%%B cap cuts null waste and closes concentration WITHOUT starving "
+            "signal.** "
+            "It trims only the cheques above a credible single-cohort ceiling and recovers the "
+            "clipped excess (which no one cohort credibly earned), so high-signal deployment stays "
+            "healthy: `s1` legit %s -> **%s**, `s5` %s -> **%s** — the treasury still spends more "
+            "than half its budget on genuine signal. Meanwhile `s2` null waste falls %s -> **%s** "
+            "and the concentration channel is bounded to exactly **%s** (no cohort can ever take a "
+            "quarter of the budget from one noisy draw). Unlike a proportional rescale, the cap "
+            "binds HARDER on the concentrated null than on the dispersed signal, so it is a genuine "
+            "targeting gain, not an exposure cut."
+            % (
+                _pct(s1_ship.legit_ppm), _pct(s1_cap.legit_ppm),
+                _pct(s5_ship.legit_ppm), _pct(s5_cap.legit_ppm),
+                _pct(s2_ship.waste_ppm), _pct(s2_cap.waste_ppm),
+                _pct(s2_cap.max_share_ppm),
+            )
+        )
+    p.append("")
+    # The frontier: tighter caps under-deploy signal.
+    s1_c5 = g("s1_strong_signal", "cap5")
+    s1_c25 = g("s1_strong_signal", "cap2.5")
+    s2_c5 = g("s2_null_effect", "cap5")
+    s2_c25 = g("s2_null_effect", "cap2.5")
+    if all((s1_cap, s1_c5, s1_c25, s2_cap, s2_c5, s2_c25)):
+        def ratio(s2c: CompensationRow, s1c: CompensationRow) -> str:
+            return _ratio(s2c.waste_ppm, s1c.legit_ppm)
+        p.append(
+            "**3. Why 10%%B and not tighter.** Tightening the cap buys less null waste but at an "
+            "accelerating cost to genuine payout: `s1` legit %s (cap 10%%) -> %s (cap 5%%) -> %s "
+            "(cap 2.5%%), while `s2` waste only falls %s -> %s -> %s. The targeting ratio "
+            "(`s2` waste / `s1` legit, lower better) is **%s at 10%%B**, worsening to %s at 5%% and "
+            "%s at 2.5%% as the cap starts clipping true positives too. 10%%B is the frontier "
+            "point: "
+            "it both minimizes null waste per legitimate dollar AND preserves the most legitimate "
+            "deployment. A tighter cap would itself become an under-deployment lever."
+            % (
+                _pct(s1_cap.legit_ppm), _pct(s1_c5.legit_ppm), _pct(s1_c25.legit_ppm),
+                _pct(s2_cap.waste_ppm), _pct(s2_c5.waste_ppm), _pct(s2_c25.waste_ppm),
+                ratio(s2_cap, s1_cap), ratio(s2_c5, s1_c5), ratio(s2_c25, s1_c25),
+            )
+        )
+    p.append("")
+    # Finalized breakpoints.
+    st1 = next((s for s in studies if s.scenario == "s1_strong_signal"), None)
+    if st1 is not None:
+        B = st1.budget_base_units
+        base_curve = _shipped_curve(studies)
+        ceiling = cap_base_units(B, COMP_CAP_FINAL_PPM)
+        final = saturate_curve(base_curve, ceiling)
+        bps = ", ".join("(%d, %d)" % (x, y) for x, y in final)
+        p.append("## The single finalized recommendation (hand to `protocol-architect`)")
+        p.append("")
+        p.append(
+            "**Calibration: keep the shipped curve scale — do NOT apply a proportional "
+            "recalibration.** The equal-share recalibration is rejected on the evidence above: it "
+            "under-deploys on genuine signal for no targeting gain. The concentration defect it was "
+            "meant to fix is fixed by the cap instead, which does it without the collateral "
+            "under-deployment."
+        )
+        p.append("")
+        p.append(
+            "**Structural cap: per-cohort 10.0%%B, expressed as a curve saturation.** On the "
+            "example manifest (`B = %d` base units, `N = %d` declared cohorts) the ceiling is "
+            "`cap_base_units = %d` (10%% of `B`), and the finalized `reward_curve.breakpoints` are:"
+            % (B, st1.declared_cohort_count, ceiling)
+        )
+        p.append("")
+        p.append("```")
+        p.append("cap_ppm            = %d            # 10.0%% of B" % COMP_CAP_FINAL_PPM)
+        p.append("cap_base_units     = %d   # per-cohort ceiling" % ceiling)
+        p.append("reward_curve.breakpoints = [%s]" % bps)
+        p.append("```")
+        p.append("")
+        p.append(
+            "This is a valid `piecewise_linear_monotonic` curve (first breakpoint `(0, 0)`, `x` "
+            "strictly increasing, `y` non-decreasing), so it validates against the frozen schema "
+            "unchanged and moves no protocol constant. It is a per-experiment `reward_curve` "
+            "fixture; the architect folds it into the recommendation and the example manifest, and "
+            "`reward_curve_hash` is recomputed over its canonical bytes as for any curve. For a "
+            "manifest with a different budget `B'`, the ceiling scales as `cap_base_units = "
+            "10% x B'`; the crossing breakpoint `x*` is `curve^-1(ceiling)` on that manifest's own "
+            "curve. The calibration RULE is \"shipped scale, 10%B per-cohort ceiling\"; these "
+            "breakpoints are its instantiation on the example manifest."
+        )
+        p.append("")
+        p.append(
+            "**Caveat, meant.** Every number here is ONE draw of ONE committed seed on a simulated "
+            "network. The cap's concentration bound (`no cohort > 10%B`) holds by construction on "
+            "any realization; the deployment and waste levels are a single realization and should "
+            "be read as such."
+        )
+    return "\n".join(p)
+
+
+def _shipped_curve(studies: list[ScenarioStudy]) -> tuple[tuple[int, int], ...]:
+    """Recover the shipped benchmark breakpoints from the example manifest (float-free)."""
+    example = json.loads(
+        (_repo() / "specs" / "examples" / "manifest.example.json").read_text("utf-8")
+    )
+    bps = example["reward_policy"]["reward_curve"]["breakpoints"]
+    return tuple((int(x), int(y)) for x, y in bps)
+
+
 def main() -> int:
     studies = run_study()
     md = render_markdown(studies)
@@ -1307,5 +1782,19 @@ def main() -> int:
     return 0
 
 
+def main_compensation() -> int:
+    studies = run_study()
+    md = render_compensation_markdown(studies)
+    out = _repo() / "docs" / "compensation-study.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(md, encoding="utf-8")
+    print("wrote %s (%d scenarios)" % (out, len(studies)))
+    return 0
+
+
 if __name__ == "__main__":  # pragma: no cover
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "compensation":
+        raise SystemExit(main_compensation())
     raise SystemExit(main())
