@@ -105,4 +105,55 @@ Design decisions made in the M1 spec draft, with rationale (so future edits don'
   plan. Schema description explicitly BANS simulator ground-truth knobs (true_effect, interference
   magnitude, confounding, Sybil params) from design.parameters (Invariant 5/6).
 
+- **v1.2 = frozen missingness ONLY, COLLAPSED single-field form (owner-approved 2026-07-30).** Added
+  required `design.parameters.missingness_policy ∈ {ineligible, impute_cohort_mean}` to the manifest;
+  bumped `spec_version` AND `manifest_version` 1.0.0→1.2.0. Manifest golden moved
+  `74e0bb82…`→`ba632e8a…` (CJSON 3852→3886); reward_curve_hash unchanged. **Chose COLLAPSED over the
+  migration proposal's original UNION form** (which added a whole `evidence_schedule` object +
+  `missingness_action` + equality constraint, golden `ac2b4bdc…`). **Why:** the engine consumes
+  exactly one knob — verified `panel.py:200–218` branches on `missingness_policy` alone, no
+  coverage-threshold presence-detection path exists; freezing that one field closes the exact
+  Invariant-1 hole (engine previously defaulted via `manifest.py:236 params.get(...,"ineligible")`).
+  UNION would freeze MORE than "missingness only" and add an unused `expected_cohort_coverage` micro
+  field needing a §2.2 scale entry. Rejected the spec_version-only bump variant (golden `b6702e9c…`,
+  manifest_version staying 1.0.0) as internally inconsistent — the schema changed, so its version
+  changes too. **Cross-impl fan-out is a SEPARATE owner-sequenced task; the spec example is
+  intentionally desynced from engine/verifier (still at `74e0bb82…`) until it runs.** Coverage-
+  threshold presence-detection (what counts as a *present* cohort-epoch) is a separate future item,
+  NOT bundled here. See [[spec-versions]].
+
+- **Benchmark reward curve DECOUPLED from the spec example (owner Condition 3, 2026-07-30).** The M4
+  at-scale benchmark reads its own fixture `causal-engine/fixtures/benchmark-manifest.json` carrying
+  the recommended shipped-scale + 10%B saturating-cap curve (reward_curve_hash `sha256:eeab732e…`;
+  recalibration rejected), NOT `specs/examples/manifest.example.json`
+  (which stays frozen under Reading B, curve golden `14b0ec34…` unmoved). **Why:** binding the
+  benchmark to the frozen example would either force a spec-golden move on every recalibration or
+  publish OLD-curve numbers under a NEW recommendation. Fixture hashes are fixture-scoped (not spec
+  goldens). The benchmark REPORT must carry a mandatory curve-provenance line naming the fixture and
+  its hash. Contract defined in `v1.2-migration-proposal.md` + `docs/benchmark-plan.md` §7; architect
+  defines it, causal-inference-engineer creates + wires `studies.py`.
+
+- **Recommended concentration control = CAP-ONLY as the DEFAULT; recalibration REJECTED (owner
+  Condition 2 + Condition-1 study flip, 2026-07-30), guidance not spec.** `multiplicity-recommendation.md`
+  §4.0. The Condition-1 compensation study (`docs/compensation-study.md`, commit 4137d7a) REVERSED the
+  earlier "calibration + cap together" framing: proportional recalibration (×1/12) UNDER-DEPLOYS — on
+  strong-signal `s1` it pays true positives only 6.15%B and recovers 93.85% (the "spending badly by
+  spending little" failure). So recalibration is out; keep the shipped curve scale. The per-cohort
+  saturation cap is the WHOLE default and the only genuine targeting improver (ratio 0.402→0.245 at
+  10%B, the frontier optimum; tighter caps clip true positives). **Finalized numbers (example manifest,
+  B=100e9, N=60):** cap_base_units=10,000,000,000 (10% of B); saturating breakpoints
+  `[["0","0"],["50000","10000000000"],["100000","10000000000"],["500000","10000000000"],["1000000","10000000000"]]`;
+  fixture reward_curve_hash `sha256:eeab732ec6ff4cf09e1185b2b42ad5e5aa83524fefbd6f3d6b079ab43d227ff3`.
+  General rule: shipped scale, 10% of B' ceiling. No new frozen field (cap = a saturating
+  `reward_curve`); no spec golden moves (Reading B — shipped example curve unchanged at 14b0ec34).
+  Cap tunable per experiment.
+
+- **NORMATIVE RULING: no concentration bound / no waste bound (owner, 2026-07-30).** Written in plain
+  language into THREE places (not a footnote): `specs/threat-model.md` §4, `docs/integration-guide.md`,
+  `docs/benchmark-report.md` limitations. The chain enforces curve SHAPE deterministically but
+  guarantees neither a concentration bound (ceiling on one cohort's share) nor a waste bound (ceiling
+  on spend to non-additional cohorts), and cannot certify targeting without assuming the truth it is
+  forbidden to assume (Invariant 6). Concentration is controllable only at the manifest level (a
+  saturating curve); integrators wiring to live incentives must supply their own controls.
+
 See [[spec-versions]] and [[open-questions]].
