@@ -88,6 +88,21 @@ Goals: stall finality, harass the coordinator/evaluator, force repeated re-work.
 
 ## 4. Residual risks (out of scope for on-chain enforcement)
 
+- **No concentration bound and no waste bound (plain-language limit — read before wiring to live
+  incentives).** The chain enforces the reward-curve **shape** deterministically: given the frozen
+  `reward_curve` and the conservative per-cohort effects, every party recomputes the identical
+  allocation (Invariant 2). It does **not** guarantee a **concentration bound** (a ceiling on how much
+  of the budget a single cohort can absorb) nor a **waste bound** (a ceiling on how much budget can
+  flow to cohorts that added no real value). Under a true null the protocol correctly pays ~0 *in
+  aggregate relative to budget* and recovers the rest (Invariant 8), but a single chance cohort can
+  still absorb a large share if the frozen curve values one cohort highly — that is a **calibration
+  property of the chosen curve, not something the chain certifies.** The chain **cannot certify
+  targeting** (that spend went to genuinely additional cohorts) without assuming the very causal truth
+  it is forbidden to assume (Invariant 6 — the chain verifies process, not truth). A manifest author
+  who wants a concentration ceiling can freeze a *saturating* `reward_curve` (a curve shape, needs no
+  new field); the recommended default calibrated + saturating-cap curve is published guidance
+  (`specs/multiplicity-recommendation.md` §4), not a protocol-enforced constant. **Integrators wiring
+  this to real incentives must supply their own concentration/waste controls; the protocol does not.**
 - **External validity of the estimate.** The chain cannot certify that the design's assumptions
   (SUTVA/no interference, correct counterfactual, no unmodeled confounding) hold. `observational_replay`
   is explicitly barred from the strongest claim (`design.eligible_for_strong_causal_claim = false`);
